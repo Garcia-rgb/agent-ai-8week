@@ -1,0 +1,56 @@
+@baseUrl = http://127.0.0.1:8000
+@userId = demo-user
+
+### 健康检查
+GET {{baseUrl}}/health
+
+### 导入文档（Swagger 更适合选择本地文件）
+POST {{baseUrl}}/documents
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="policy.md"
+Content-Type: text/markdown
+
+退款将在三个工作日内原路退回。
+--boundary--
+
+### 知识问答
+POST {{baseUrl}}/chat
+Content-Type: application/json
+
+{
+  "message": "退货后多久到账？",
+  "user_id": "{{userId}}"
+}
+
+### 订单工具
+POST {{baseUrl}}/chat
+Content-Type: application/json
+
+{
+  "message": "查询订单 A1001",
+  "user_id": "{{userId}}"
+}
+
+### 工单意图——先取得 confirmation_token
+POST {{baseUrl}}/chat
+Content-Type: application/json
+
+{
+  "message": "物流一直没有更新，请创建工单",
+  "user_id": "{{userId}}"
+}
+
+### 确认创建工单——替换令牌
+POST {{baseUrl}}/tickets
+Content-Type: application/json
+
+{
+  "confirmation_token": "replace-with-token-from-chat",
+  "user_id": "{{userId}}"
+}
+
+### 离线评测（先运行 python scripts/seed.py）
+POST {{baseUrl}}/evaluations/run
+
