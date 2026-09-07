@@ -5,13 +5,13 @@
 ## 1. 环境确认（15 分钟）
 
 ```powershell
-cd D:\202609
-.\.venv\Scripts\Activate.ps1
-python --version
-pytest -q
+cd D:\agent1\projects\agent-ai-8week
+conda run -n agent-ai-8week python --version
+conda run -n agent-ai-8week python -m pytest -q
 ```
 
-看到 Python 3.12 和 15 个测试通过即可。不要升级全部依赖。
+看到 Python 3.12 和 15 个测试通过即可。当前 PowerShell 禁止加载配置脚本，
+因此这里使用 `conda run`，不要求先执行 `conda activate`。不要升级全部依赖。
 
 ## 2. Python 闭卷摸底（45 分钟，禁止使用 AI）
 
@@ -44,4 +44,3 @@ pytest -q
 - Git 提交建议：`study: complete day 1 python baseline`。
 
 Day 1 的成功标准是明确真实短板，并完成一次无 AI 编码，不是看完很多视频。
-
