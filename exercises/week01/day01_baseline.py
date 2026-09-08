@@ -1,6 +1,5 @@
 import json
 
-
 # 1. 列表：按顺序保存多个数据
 names = ["apple", "banana", "apple", "orange", "banana"]
 
