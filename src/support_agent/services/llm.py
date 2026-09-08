@@ -10,12 +10,13 @@ class LLMError(RuntimeError):
 
 
 class OpenAICompatibleClient:
-    """Small vendor-neutral adapter for OpenAI-compatible chat APIs."""
+    """面向 OpenAI 兼容聊天接口的轻量适配器，不绑定具体模型厂商。"""
 
     def __init__(self, settings: Settings):
         self.settings = settings
 
     async def answer(self, question: str, contexts: list[str]) -> str:
+        # 未配置远程模型时使用本地回答，保证学习和测试不依赖 API 密钥。
         if not self.settings.llm_enabled:
             return self.local_answer(contexts)
         prompt = "\n\n".join(f"[资料{i + 1}] {text}" for i, text in enumerate(contexts))
@@ -36,6 +37,7 @@ class OpenAICompatibleClient:
         url = f"{self.settings.llm_base_url.rstrip('/')}/chat/completions"
         headers = {"Authorization": f"Bearer {self.settings.llm_api_key}"}
         try:
+            # 网络请求只放在适配器中，上层 Agent 不需要关心具体接口格式。
             async with httpx.AsyncClient(timeout=30) as client:
                 response = await client.post(url, json=payload, headers=headers)
                 response.raise_for_status()

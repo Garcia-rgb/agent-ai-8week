@@ -4,6 +4,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """集中读取应用配置；同名环境变量会覆盖这里的默认值。"""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_env: str = "development"
@@ -21,6 +22,7 @@ class Settings(BaseSettings):
 
     @property
     def llm_enabled(self) -> bool:
+        """只有远程模型所需的三项配置齐全时才启用模型调用。"""
         return bool(self.llm_base_url and self.llm_api_key and self.llm_model)
 
 

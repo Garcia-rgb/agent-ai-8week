@@ -1,4 +1,4 @@
-"""Run the main user journey against the ASGI app without opening a port."""
+"""无需启动网络端口，直接对 ASGI 应用运行一遍主要用户流程。"""
 
 from fastapi.testclient import TestClient
 
@@ -6,6 +6,7 @@ from support_agent.main import app
 
 
 def main() -> None:
+    """依次验证健康检查、知识问答、工单确认、防重放和离线评测。"""
     with TestClient(app) as client:
         health = client.get("/health")
         health.raise_for_status()

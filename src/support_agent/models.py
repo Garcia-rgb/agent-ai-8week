@@ -17,6 +17,7 @@ def utcnow() -> datetime:
 
 
 class Conversation(Base):
+    """一次用户会话，对应数据库中的 conversations 表。"""
     __tablename__ = "conversations"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(String(64), index=True)
@@ -24,6 +25,7 @@ class Conversation(Base):
 
 
 class Message(Base):
+    """会话中的单条消息，可保存 RAG 引用信息。"""
     __tablename__ = "messages"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     session_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), index=True)
@@ -43,6 +45,7 @@ class SourceDocument(Base):
 
 
 class DocumentChunk(Base):
+    """文档切分后的可检索片段及其向量。"""
     __tablename__ = "document_chunks"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     document_id: Mapped[str] = mapped_column(ForeignKey("source_documents.id"), index=True)
@@ -50,6 +53,7 @@ class DocumentChunk(Base):
     page: Mapped[int | None] = mapped_column(Integer, nullable=True)
     content: Mapped[str] = mapped_column(Text)
     chunk_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+    # PostgreSQL 使用 pgvector；本地 SQLite 演示模式改用 JSON 保存同一份向量。
     embedding: Mapped[list[float]] = mapped_column(Vector(384).with_variant(JSON, "sqlite"))
 
 

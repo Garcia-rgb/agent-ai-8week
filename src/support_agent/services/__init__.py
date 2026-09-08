@@ -1,1 +1,1 @@
-"""Core application services."""
+"""应用的核心业务服务。"""

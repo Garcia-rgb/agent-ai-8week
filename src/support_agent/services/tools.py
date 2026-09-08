@@ -22,11 +22,12 @@ _OPERATORS = {
 
 
 def safe_calculate(expression: str) -> float:
-    """Evaluate arithmetic only; names, calls and attribute access are rejected."""
+    """只计算普通算术表达式，拒绝变量名、函数调用和属性访问。"""
     if len(expression) > 100:
         raise ToolError("表达式过长")
 
     def evaluate(node: ast.AST) -> float:
+        # 只处理白名单中的语法树节点，避免直接执行用户输入的代码。
         if isinstance(node, ast.Expression):
             return evaluate(node.body)
         if isinstance(node, ast.Constant) and isinstance(node.value, int | float):
@@ -70,6 +71,7 @@ def find_order_id(text: str) -> str | None:
 
 
 def query_order(order_id: str) -> Order:
+    """从模拟订单数据中查询订单；真实项目中这里应调用数据库或业务接口。"""
     try:
         return MOCK_ORDERS[order_id.upper()]
     except KeyError as exc:

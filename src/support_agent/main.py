@@ -29,6 +29,7 @@ from .services.security import verify_confirmation_token
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    """应用启动时创建数据库表，关闭时结束生命周期。"""
     await create_schema()
     yield
 
@@ -45,6 +46,8 @@ DbDep = Annotated[AsyncSession, Depends(get_db)]
 SettingsDep = Annotated[Settings, Depends(get_settings)]
 UploadDep = Annotated[UploadFile, File()]
 UserHeader = Annotated[str, Header()]
+
+# 上面的类型别名同时描述参数类型和 FastAPI 的依赖来源，减少接口中的重复代码。
 
 
 @app.get("/health")
@@ -141,6 +144,7 @@ async def create_ticket(
     if payload.get("action") != "create_ticket" or payload.get("user_id") != request.user_id:
         raise HTTPException(403, "确认令牌与当前操作或用户不匹配")
     token_hash = hashlib.sha256(request.confirmation_token.encode()).hexdigest()
+    # 只保存令牌哈希并检查审计记录，防止同一个确认令牌被重复使用。
     replay = await db.scalar(
         select(AuditLog).where(
             AuditLog.action == "confirmation_consumed", AuditLog.resource == token_hash

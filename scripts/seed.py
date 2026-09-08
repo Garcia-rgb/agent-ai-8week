@@ -7,6 +7,7 @@ from support_agent.services.rag import RAGService
 
 
 async def main() -> None:
+    """把 sample_data 目录中的示例文档批量导入知识库。"""
     await create_schema()
     async with SessionFactory() as db:
         for path in Path("sample_data").glob("*.*"):

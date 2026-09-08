@@ -7,6 +7,7 @@ from typing import Any
 
 
 def create_confirmation_token(payload: dict[str, Any], secret: str, ttl_seconds: int = 600) -> str:
+    """为待确认操作生成带有效期和签名的令牌。"""
     body = {**payload, "exp": int(time.time()) + ttl_seconds}
     encoded = (
         base64.urlsafe_b64encode(
@@ -16,10 +17,12 @@ def create_confirmation_token(payload: dict[str, Any], secret: str, ttl_seconds:
         .rstrip("=")
     )
     signature = hmac.new(secret.encode(), encoded.encode(), hashlib.sha256).hexdigest()
+    # 签名用于发现内容是否被篡改；Base64 只是编码，并不负责加密。
     return f"{encoded}.{signature}"
 
 
 def verify_confirmation_token(token: str, secret: str) -> dict[str, Any]:
+    """校验令牌签名和有效期，成功后返回其中的操作数据。"""
     try:
         encoded, supplied_signature = token.split(".", 1)
         expected = hmac.new(secret.encode(), encoded.encode(), hashlib.sha256).hexdigest()
@@ -44,5 +47,6 @@ SUSPICIOUS_PATTERNS = (
 
 
 def looks_like_prompt_injection(text: str) -> bool:
+    """用简单关键词识别明显的提示词注入；生产环境需要更完整的防护。"""
     lowered = text.lower()
     return any(pattern in lowered for pattern in SUSPICIOUS_PATTERNS)

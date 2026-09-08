@@ -16,11 +16,13 @@ SessionFactory = async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def get_db() -> AsyncIterator[AsyncSession]:
+    """为一次请求提供数据库会话，请求结束后自动关闭。"""
     async with SessionFactory() as session:
         yield session
 
 
 async def create_schema() -> None:
+    # 必须先导入模型，SQLAlchemy 才能把所有表登记到 metadata 中。
     from . import models  # noqa: F401
 
     async with engine.begin() as connection:

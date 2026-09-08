@@ -12,12 +12,14 @@ from .embeddings import cosine_similarity, local_embedding, tokenize
 
 @dataclass(frozen=True)
 class SearchHit:
+    """一次检索命中，包含文本片段、来源文档和相关度分数。"""
     chunk: DocumentChunk
     document: SourceDocument
     score: float
 
 
 class RAGService:
+    """负责文档入库、切块、向量生成、检索和引用格式转换。"""
     def __init__(self, db: AsyncSession, chunk_size: int = 700, overlap: int = 100):
         self.db = db
         self.chunk_size = chunk_size
@@ -26,6 +28,7 @@ class RAGService:
     async def ingest(
         self, filename: str, content_type: str, data: bytes
     ) -> tuple[SourceDocument, int, bool]:
+        """导入文档；相同内容通过校验和去重，不重复生成文本片段。"""
         digest = checksum(data)
         existing = await self.db.scalar(
             select(SourceDocument).where(SourceDocument.checksum == digest)
@@ -58,6 +61,7 @@ class RAGService:
         return document, len(pieces), False
 
     async def search(self, query: str, top_k: int = 5) -> list[SearchHit]:
+        """混合关键词重合度与本地向量相似度，返回分数最高的片段。"""
         rows = (
             await self.db.execute(
                 select(DocumentChunk, SourceDocument).join(
@@ -75,6 +79,7 @@ class RAGService:
             )
             lexical = overlap / max(sum(query_terms.values()), 1)
             semantic = max(cosine_similarity(query_embedding, list(chunk.embedding)), 0.0)
+            # 当前权重用于教学演示；生产环境应通过评测集调参，并设置最低分阈值。
             score = 0.55 * lexical + 0.45 * semantic
             if score > 0:
                 hits.append(SearchHit(chunk, document, score))

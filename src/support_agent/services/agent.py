@@ -12,6 +12,7 @@ from .tools import ToolError, query_order, safe_calculate
 
 
 class SupportAgent:
+    """协调会话、路由、工具、RAG、模型调用和消息持久化。"""
     def __init__(self, db: AsyncSession, settings: Settings):
         self.db = db
         self.settings = settings
@@ -20,6 +21,7 @@ class SupportAgent:
         self.graph = build_route_graph()
 
     async def _conversation(self, session_id: str | None, user_id: str) -> Conversation:
+        """读取已有会话或创建新会话，同时检查会话归属。"""
         conversation = await self.db.get(Conversation, session_id) if session_id else None
         if conversation and conversation.user_id != user_id:
             raise PermissionError("无权访问该会话")
@@ -42,8 +44,10 @@ class SupportAgent:
         return message
 
     async def respond(self, text: str, session_id: str | None, user_id: str) -> ChatResponse:
+        """处理一轮用户消息，并将用户消息和助手回答一起保存。"""
         conversation = await self._conversation(session_id, user_id)
         await self._save_message(conversation.id, "user", text)
+        # 图只负责判断“该走哪条路”，真正的工具执行仍由 Python 代码控制。
         state = await self.graph.ainvoke({"message": text})
         route = state["route"]
         answer: str
@@ -82,11 +86,13 @@ class SupportAgent:
                 },
                 self.settings.confirmation_secret,
             )
+            # 创建工单会写入数据，因此这里只返回确认令牌，不立即执行。
             answer = "创建工单会产生写操作，请确认后再提交。"
             pending_action = PendingAction(
                 action="create_ticket", confirmation_token=token, summary=f"创建工单：{text[:80]}"
             )
         else:
+            # 知识问答先检索相关片段，再让模型依据片段组织答案。
             hits = await self.rag.search(text, self.settings.retrieval_top_k)
             citations = self.rag.citations(hits)
             try:

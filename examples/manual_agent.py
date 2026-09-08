@@ -1,6 +1,6 @@
-"""Week 3 exercise: a framework-free tool boundary.
+"""第 3 周练习：不使用 Agent 框架，手写清晰的工具调用边界。
 
-Run: python examples/manual_agent.py
+运行方式：python examples/manual_agent.py
 """
 
 import json
@@ -14,6 +14,7 @@ TOOLS = {
 
 
 def execute_tool_call(name: str, arguments_json: str):
+    """校验工具名称和 JSON 参数后，才允许执行已注册的工具。"""
     if name not in TOOLS:
         raise ToolError(f"未知工具：{name}")
     try:
