@@ -1,7 +1,7 @@
 # 学习记录｜阶段 1：Python、FastAPI 与 Agent 基础流程
 
 > 整理日期：2026-09-08  
-> 当前进度：已完成环境恢复和项目全貌的大部分第一轮讲解，最近讲完离线检索评测；详细跨主机进度与下一步见 `AI_AGENT_8W_HANDOFF.md`。
+> 当前进度：项目全貌第一遍已经完成，下一步开始压缩版第 1 周 FastAPI 任务 CRUD；详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`。
 
 ## 1. 当前环境
 
@@ -324,8 +324,84 @@ rollback → 发生错误时撤销未提交修改
 - 已完成审计字段判断练习：内部用户 ID、动作、资源、时间、结果应该记录；完整令牌和 API Key 不应原样记录；业务正文应按需摘要或脱敏。
 - 当前属于引导下实操成功，尚未独立实现或通过闭卷验收。
 
+## 14. 测试体系
+
+- 单元测试检查一个函数或小模块，例如安全计算器、订单查询和确认令牌。
+- 接口测试从 HTTP 入口经过校验、业务逻辑和数据库，再检查响应。
+- 工作流测试检查多个步骤及业务规则，例如“申请工单确认 → 首次创建成功 → 重复令牌返回 409”。
+- `tests/conftest.py` 使用临时数据库和 FastAPI 依赖替换，不污染日常使用的 `support_agent.db`。
+- 用户已在 PyCharm 中亲自运行工具测试、API 测试和全量测试；随着练习测试加入，当前基线为 `19 passed`。
+- 测试通过只代表已有测试覆盖的行为符合预期，不代表真实模型、网络和所有边界情况都没有问题。
+
+## 15. Docker、健康检查与 CI
+
+- Dockerfile 将 Python 3.12、项目依赖、代码和启动命令组合成可重复运行的镜像。
+- Docker Compose 同时管理 FastAPI、PostgreSQL/pgvector 和 Redis；容器之间通过服务名通信。
+- PostgreSQL 使用 Volume 保存数据，重新创建容器时数据不必随容器消失。
+- PostgreSQL 和 Redis 配置了健康检查，API 等待它们健康后启动。
+- 当前 `/health` 只能证明 FastAPI 能响应，没有深度检查数据库、Redis 和外部模型。
+- Redis 服务已经写入 Compose，但当前业务代码尚未真正使用缓存或限流。
+- GitHub Actions 会在推送或 PR 时安装 Python、运行 Ruff 和 pytest；当前属于 CI，还没有自动发布到服务器的 CD。
+
+## 16. 项目演示与面试表达
+
+固定演示顺序：
+
+```text
+健康检查
+→ 导入文档并展示重复检测
+→ 知识问答与引用
+→ 计算器和订单查询
+→ 工单二次确认与防重放
+→ Prompt Injection 拦截
+→ 自动化测试与离线评测
+```
+
+面试表达按“业务问题 → 架构 → RAG → 工具与安全 → 测试评测 → 限制和下一步”组织。
+
+当前可以真实声称 FastAPI、SQLite 本地模式、混合检索、规则路由、安全工具、19 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称真实 LLM Tool Calling、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
+
+## 17. 当前准确进度
+
+项目全貌第一遍已经完成，包括：Python/FastAPI 基础、数据库关系、规则路由、工具调用、RAG、LLM 与 Agent 区别、会话与上下文、可靠性、日志、评测、安全审计、测试、Docker/CI 和项目演示。
+
+这些大多属于概念讲解和引导下实操，不能等同于独立掌握。当前独立编码能力仍处于第 1 周基础阶段。
+
+## 18. 压缩版第 1 周 FastAPI CRUD（已完成）
+
+- 新增 `exercises/week01/task_api.py`，实现内存版任务管理器。
+- 已实现 `POST /tasks`、`GET /tasks`、`PATCH /tasks/{task_id}` 和 `DELETE /tasks/{task_id}`。
+- 用户在代码骨架上亲自补充了完成任务和删除任务的核心循环。
+- 已通过 Swagger 验证创建、查询和修改流程，并理解 `404`、`422` 和 `501` 的区别。
+- 新增 `tests/test_task_api_exercise.py`，自动验证完整 CRUD、重复删除返回 `404`、空标题返回 `422`。
+- 内存版练习测试为 `2 passed`；Ruff 检查通过。
+- 当前数据保存在进程内存的 `tasks` 列表中，服务器重启后会消失，这是进入数据库学习的直接问题。
+
+## 19. 第 2 周数据库与 SQLAlchemy（进行中）
+
+- 用户通过停止并重启服务，亲自观察到内存版任务消失、SQLite 版任务仍然存在，理解了持久化的作用。
+- 新增 `exercises/week02/task_api_sqlite.py`，使用原生 SQLite SQL 实现完整任务 CRUD。
+- 已学习 `CREATE TABLE`、`INSERT`、`SELECT`、`UPDATE`、`DELETE`、参数占位符、主键、非空约束和事务。
+- 使用 `EXPLAIN QUERY PLAN` 对比：按主键 `id` 查询使用索引，按普通 `title` 查询执行全表扫描。
+- 已理解索引提高读取速度，但增加存储和写入维护成本，不能给所有字段盲目加索引。
+- 已理解事务中的 `add`、`flush`、`commit` 和 `rollback`，以及工单与确认审计必须一起提交的原因。
+- 已学习主键、唯一、非空、外键和 CHECK 约束，理解 Pydantic、业务校验和数据库约束不能互相替代。
+- 新增 `exercises/week02/task_api_sqlalchemy.py`，使用异步 SQLAlchemy、ORM 模型、AsyncSession 和 FastAPI 依赖注入实现完整 CRUD。
+- 已对照理解“类→表、对象→行、属性→列”，并学习 `session.add()`、`session.get()`、`select()`、`session.delete()` 和事务提交。
+- 已学习 `Conversation → Message → Feedback` 的一对多和外键关系，以及 SQLite 外键默认执行检查的当前限制。
+- 已理解 FastAPI 依赖注入如何提供数据库 Session 和配置，以及测试如何替换正式数据库。
+- 新增原生 SQLite 和 SQLAlchemy 两项完整 CRUD 测试；当前项目全量测试为 `19 passed`，Ruff 通过。
+- 当前内容为引导下实现和理解，尚未达到无提示独立写出异步 SQLAlchemy CRUD 的程度。
+
+## 20. 当前主机 OpenSSL 兼容问题
+
+- Windows Code Integrity 企业策略阻止了 Conda 环境中 conda-forge 的 `libssl-3-x64.dll`，导致 Uvicorn 导入 `_ssl` 时失败；这不是 SQLAlchemy 代码错误。
+- 已使用本机缓存的 defaults OpenSSL 3.5.7 离线替换，未联网下载，也未替用户接受 Anaconda 服务条款。
+- 修复后 SSL 导入、19 项测试、Uvicorn、SQLAlchemy `POST /tasks` 和 `GET /tasks` 均验证成功。
+- 当前主机暂时不要直接执行 `conda env update -f environment.yml --prune`，否则 conda-forge OpenSSL 可能被重新安装。其他主机如果没有企业签名策略，可继续按原环境文件使用。
+
 ## 下一阶段
 
-安全与审计的第一轮讲解和实操已完成。下一步完成测试体系、Docker/部署和作品演示，再用 1～2 个学习回合压缩完成第 1 周 FastAPI CRUD，随后从第 2 周数据库与测试开始正式动手。RAG、LLM、Agent、评测和安全仍不视为已经独立掌握。
+第 2 周数据库 CRUD、索引、事务、约束、外键、SQLAlchemy 和依赖注入已完成第一轮讲解与实操。下一步从 pytest Fixture 和 Mock 继续，重点练习临时数据库、依赖替换，以及不调用真实 LLM 时如何模拟超时、429 和非法响应。
 
 跨主机继续学习时，优先阅读仓库根目录的 `AI_AGENT_8W_HANDOFF.md`。
