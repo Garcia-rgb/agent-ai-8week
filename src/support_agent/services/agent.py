@@ -106,7 +106,11 @@ class SupportAgent:
             answer,
             [citation.model_dump() for citation in citations],
         )
-        await self.db.commit()
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
         return ChatResponse(
             session_id=conversation.id,
             message_id=assistant_message.id,

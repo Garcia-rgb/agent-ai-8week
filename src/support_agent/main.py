@@ -3,8 +3,17 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, UploadFile, status
-from sqlalchemy import select
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import Settings, get_settings
@@ -17,6 +26,7 @@ from .schemas import (
     DocumentResponse,
     EvaluationResponse,
     FeedbackRequest,
+    SessionListResponse,
     SessionResponse,
     TicketCreateRequest,
     TicketResponse,
@@ -92,6 +102,44 @@ async def chat(
         raise HTTPException(403, str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
+
+
+LimitQuery = Annotated[int, Query(ge=1, le=100)]
+OffsetQuery = Annotated[int, Query(ge=0)]
+
+
+@app.get("/sessions", response_model=SessionListResponse)
+async def list_sessions(
+    db: DbDep,
+    x_user_id: UserHeader = "demo-user",
+    limit: LimitQuery = 10,
+    offset: OffsetQuery = 0,
+) -> SessionListResponse:
+    total = await db.scalar(
+        select(func.count())
+        .select_from(Conversation)
+        .where(Conversation.user_id == x_user_id)
+    )
+
+    conversations = (
+        await db.scalars(
+            select(Conversation)
+            .where(Conversation.user_id == x_user_id)
+            .order_by(
+                Conversation.created_at.desc(),
+                Conversation.id.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+    ).all()
+
+    return SessionListResponse(
+        items=conversations,
+        total=total or 0,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @app.get("/sessions/{session_id}", response_model=SessionResponse)

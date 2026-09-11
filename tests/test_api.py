@@ -1,3 +1,5 @@
+from unittest.mock import AsyncMock, patch
+
 import httpx
 
 
@@ -43,3 +45,19 @@ async def test_injection_is_blocked(client: httpx.AsyncClient) -> None:
     )
     assert response.status_code == 200
     assert "不能执行" in response.json()["answer"]
+
+
+async def test_chat_uses_llm_answer_without_real_network(client: httpx.AsyncClient) -> None:
+    with patch(
+        "support_agent.services.agent.OpenAICompatibleClient.answer",
+        new_callable=AsyncMock,
+        return_value="模拟模型回答",
+    ) as mock_answer:
+        response = await client.post(
+            "/chat",
+            json={"message": "怎么修改账户昵称？", "user_id": "u1"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["answer"] == "模拟模型回答"
+    mock_answer.assert_awaited_once_with("怎么修改账户昵称？", [])

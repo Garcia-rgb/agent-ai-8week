@@ -56,6 +56,21 @@ class SessionResponse(BaseModel):
     messages: list[MessageView]
 
 
+class SessionSummary(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    user_id: str
+    created_at: datetime
+
+
+class SessionListResponse(BaseModel):
+    items: list[SessionSummary]
+    total: int
+    limit: int
+    offset: int
+
+
 class FeedbackRequest(BaseModel):
     message_id: str
     rating: int = Field(ge=-1, le=1)

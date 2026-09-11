@@ -4,6 +4,7 @@
 .idea/
 __pycache__/
 .pytest_cache/
+pytest-temp/
 .ruff_cache/
 *.py[cod]
 *.db

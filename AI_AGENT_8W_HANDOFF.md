@@ -1,6 +1,6 @@
 # AI Agent / AI 应用开发 8 周转型计划｜跨主机交接
 
-> 更新日期：2026-09-08
+> 更新日期：2026-09-11
 > 用途：在另一台主机继续本项目和学习对话。新 Codex 应先读本文件，再读 `LEARNING_README.md`、`README.md` 和 `course/README.md`。
 
 ## 学员目标与学习策略
@@ -46,10 +46,11 @@ conda run -n agent-ai-8week python -m pytest -q
 - Conda 环境：`agent-ai-8week`
 - Python：3.12
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
-- 已验证基线：15 个测试通过，Ruff 检查通过。
-- 当前加入三组任务 API 练习后，全量基线更新为 19 个测试通过，Ruff 检查通过。
+- 当前全量基线：23 个测试通过，Ruff 检查通过。
 - PowerShell 的配置脚本受执行策略限制，终端可能无法直接识别 `conda`。PyCharm 选对解释器后直接使用 `python` 即可；也可以使用 `conda run -n agent-ai-8week ...`。
 - 2026-09-09 Windows 企业代码完整性策略曾阻止 conda-forge 的 OpenSSL 3.6.4；已用本机缓存的 defaults OpenSSL 3.5.7 离线修复。当前主机暂不执行 `conda env update -f environment.yml --prune`，避免恢复被拦截的 DLL。
+- 2026-09-11 已重新安装并验证 Docker Desktop；Compose 可正常启动 API、PostgreSQL/pgvector 和 Redis，三个容器均通过健康检查。
+- Docker 本机镜像、容器、Volume 和 Docker Desktop 安装不进入 Git；跨主机只同步 Dockerfile、Compose 配置、样例数据和代码，新主机需自行安装 Docker Desktop 并重新构建。
 
 常用命令：
 
@@ -155,11 +156,11 @@ Swagger：`http://127.0.0.1:8000/docs`
 - Python/FastAPI 基础：理解一般，尚不能稳定从空白独立完成 CRUD。
 - LLM、RAG、Agent、上下文、可靠性：完成第一轮概念预览，能够判断一些现象，但尚未完成正式实现和验收。
 - 数据库：已在引导下完成原生 SQLite 和异步 SQLAlchemy CRUD、索引观察、事务、约束、外键和依赖注入，尚不能无提示独立重写。
-- 测试、LangGraph、评测：读过现有实现并理解大意；测试已开始动手，Fixture 和 Mock 是下一步。
+- 测试：已完成 Fixture、依赖替换、Mock、API 分页测试和事务回滚测试的第一轮实操；LangGraph、评测仍主要是读过现有实现并理解大意。
 
 因此不能简单记录为“学到第 6 周”。更准确的说法是：
 
-> 项目全貌第一遍和压缩版第 1 周 FastAPI 任务 CRUD 已经完成，下一步从第 2 周数据库与测试正式动手。
+> 项目全貌第一遍和压缩版第 1 周已完成；第 2 周 Day 1～Day 6 已完成第一轮讲解与实操，下一步进行 Day 7 无 AI 复盘与验收。
 
 ## 7. 约定的后续顺序
 
@@ -182,21 +183,25 @@ DELETE /tasks/{id}
 
 ### 阶段 C：从第 2 周正式动手
 
-当前已完成 SQLite/SQLAlchemy CRUD、查询、索引、事务、约束、外键和依赖注入的第一轮实操，新增：
+当前已完成 SQLite/SQLAlchemy CRUD、查询、索引、事务、约束、外键、依赖注入、pytest Fixture/Mock、会话分页、事务回滚和 Docker Compose 的第一轮实操，新增或修改：
 
 - `exercises/week02/task_api_sqlite.py`
 - `exercises/week02/task_api_sqlalchemy.py`
 - `tests/test_task_api_sqlite_exercise.py`
 - `tests/test_task_api_sqlalchemy_exercise.py`
+- `tests/test_sessions_api.py`
+- `tests/test_agent_transaction.py`
+- `.dockerignore`
+- `docker-compose.yml` 的 API 健康检查
 
-全量测试为 `19 passed`。下一步学习 pytest Fixture 和 Mock，然后继续分层、错误映射、Docker 实操，并依次把 LLM、RAG 和 LangGraph 从“听过”变成“做过”。
+全量测试为 `23 passed`。Docker Compose 已真实构建并启动 API、PostgreSQL/pgvector、Redis；已将 4 份 `sample_data` 文档导入 PostgreSQL并完成一次端到端 RAG 问答。下一步是第 2 周 Day 7：无 AI 复写会话/消息查询、运行全部测试并复盘，然后进入第 3 周 LLM API 与手写 Agent。
 
 ## 8. 建议给下一台主机 Codex 的首条提示词
 
 用户可以在新对话中发送：
 
 ```text
-请先读取仓库根目录的 AI_AGENT_8W_HANDOFF.md、LEARNING_README.md、README.md 和 course/README.md，接着当前学习进度继续。项目全貌第一遍和压缩版第 1 周已经完成；第 2 周已经在引导下完成原生 SQLite、异步 SQLAlchemy CRUD、索引、事务、约束、外键和依赖注入，当前全量测试为 19 passed。下一步从 pytest Fixture 和 Mock 开始。请用中文、概念优先、少讲不必要的语法；优先让我通过小实验观察现象，再补关键代码和测试。不要把讲过等同于已经掌握。
+请先读取仓库根目录的 AI_AGENT_8W_HANDOFF.md、LEARNING_README.md、README.md 和 course/README.md，接着当前学习进度继续。项目全貌第一遍和压缩版第 1 周已经完成；第 2 周 Day 1～Day 6 已在引导下完成，包含 SQL/SQLAlchemy、事务、依赖注入、pytest Fixture/Mock、会话分页、事务回滚及 Docker Compose 实操，当前全量测试为 23 passed。下一步进行第 2 周 Day 7 无 AI 复盘与验收，然后进入第 3 周。请用中文、概念优先、少讲不必要的语法；优先让我通过小实验观察现象，再补关键代码和测试。不要把讲过等同于已经掌握。
 ```
 
 ## 9. 新主机开始前的核对清单
@@ -204,6 +209,6 @@ DELETE /tasks/{id}
 1. `git pull` 后确认存在本文件和 `LEARNING_README.md`。
 2. 创建或同步 Conda 环境，不要硬编码当前主机的解释器路径。
 3. 从 `.env.example` 创建 `.env`；默认先不要填写真实模型密钥。
-4. 运行种子脚本、19 个测试和 Ruff。
+4. 运行种子脚本、23 个测试和 Ruff。
 5. 启动服务并打开 Swagger。
 6. 先确认用户希望继续“全貌讲解”，不要擅自重头重复 Python 基础。

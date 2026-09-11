@@ -1,7 +1,7 @@
 # 学习记录｜阶段 1：Python、FastAPI 与 Agent 基础流程
 
-> 整理日期：2026-09-08  
-> 当前进度：项目全貌第一遍已经完成，下一步开始压缩版第 1 周 FastAPI 任务 CRUD；详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`。
+> 整理日期：2026-09-11
+> 当前进度：项目全貌和压缩版第 1 周已完成；第 2 周 Day 1～Day 6 已完成第一轮实操，下一步进行 Day 7 无 AI 复盘与验收。详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`。
 
 ## 1. 当前环境
 
@@ -12,7 +12,7 @@
 - IDE：PyCharm
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
 - 本地模式：SQLite，不需要模型 API、PostgreSQL、Redis 或 Docker
-- 基线：15 个测试通过，Ruff 检查通过
+- 基线：23 个测试通过，Ruff 检查通过
 
 当前 PowerShell 无法自动加载 Conda 初始化脚本。只要 PyCharm 已选择上面的解释器，就可以直接使用：
 
@@ -330,7 +330,7 @@ rollback → 发生错误时撤销未提交修改
 - 接口测试从 HTTP 入口经过校验、业务逻辑和数据库，再检查响应。
 - 工作流测试检查多个步骤及业务规则，例如“申请工单确认 → 首次创建成功 → 重复令牌返回 409”。
 - `tests/conftest.py` 使用临时数据库和 FastAPI 依赖替换，不污染日常使用的 `support_agent.db`。
-- 用户已在 PyCharm 中亲自运行工具测试、API 测试和全量测试；随着练习测试加入，当前基线为 `19 passed`。
+- 用户已在 PyCharm 中亲自运行工具测试、API 测试和全量测试；随着分页、Mock 和事务回滚测试加入，当前基线为 `23 passed`。
 - 测试通过只代表已有测试覆盖的行为符合预期，不代表真实模型、网络和所有边界情况都没有问题。
 
 ## 15. Docker、健康检查与 CI
@@ -339,6 +339,9 @@ rollback → 发生错误时撤销未提交修改
 - Docker Compose 同时管理 FastAPI、PostgreSQL/pgvector 和 Redis；容器之间通过服务名通信。
 - PostgreSQL 使用 Volume 保存数据，重新创建容器时数据不必随容器消失。
 - PostgreSQL 和 Redis 配置了健康检查，API 等待它们健康后启动。
+- API 已增加自身健康检查；Compose 中 API、PostgreSQL 和 Redis 三个容器均已真实构建、启动并显示为 healthy。
+- Docker Desktop、镜像、容器和本机 Volume 不提交到 Git；另一台主机从仓库重新构建，业务演示数据通过 `sample_data/` 再导入。
+- 2026-09-11 Docker 重装后确认旧 PostgreSQL Volume 仍存在，原卷保留 8 张表但业务记录为空；随后重新导入 4 份样例文档并成功完成一次知识库问答。
 - 当前 `/health` 只能证明 FastAPI 能响应，没有深度检查数据库、Redis 和外部模型。
 - Redis 服务已经写入 Compose，但当前业务代码尚未真正使用缓存或限流。
 - GitHub Actions 会在推送或 PR 时安装 Python、运行 Ruff 和 pytest；当前属于 CI，还没有自动发布到服务器的 CD。
@@ -359,7 +362,7 @@ rollback → 发生错误时撤销未提交修改
 
 面试表达按“业务问题 → 架构 → RAG → 工具与安全 → 测试评测 → 限制和下一步”组织。
 
-当前可以真实声称 FastAPI、SQLite 本地模式、混合检索、规则路由、安全工具、19 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称真实 LLM Tool Calling、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
+当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、混合检索、规则路由、安全工具、23 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称真实 LLM Tool Calling、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
 
 ## 17. 当前准确进度
 
@@ -390,7 +393,7 @@ rollback → 发生错误时撤销未提交修改
 - 已对照理解“类→表、对象→行、属性→列”，并学习 `session.add()`、`session.get()`、`select()`、`session.delete()` 和事务提交。
 - 已学习 `Conversation → Message → Feedback` 的一对多和外键关系，以及 SQLite 外键默认执行检查的当前限制。
 - 已理解 FastAPI 依赖注入如何提供数据库 Session 和配置，以及测试如何替换正式数据库。
-- 新增原生 SQLite 和 SQLAlchemy 两项完整 CRUD 测试；当前项目全量测试为 `19 passed`，Ruff 通过。
+- 新增原生 SQLite 和 SQLAlchemy 两项完整 CRUD 测试；后续又完成会话分页、Mock 和事务失败回滚测试，当前项目全量测试为 `23 passed`，Ruff 通过。
 - 当前内容为引导下实现和理解，尚未达到无提示独立写出异步 SQLAlchemy CRUD 的程度。
 
 ## 20. 当前主机 OpenSSL 兼容问题
@@ -402,6 +405,6 @@ rollback → 发生错误时撤销未提交修改
 
 ## 下一阶段
 
-第 2 周数据库 CRUD、索引、事务、约束、外键、SQLAlchemy 和依赖注入已完成第一轮讲解与实操。下一步从 pytest Fixture 和 Mock 继续，重点练习临时数据库、依赖替换，以及不调用真实 LLM 时如何模拟超时、429 和非法响应。
+第 2 周 Day 1～Day 6 已完成第一轮讲解与实操：数据库 CRUD、索引、事务、约束、外键、SQLAlchemy、依赖注入、pytest Fixture/Mock、会话分页、事务回滚和 Docker Compose。下一步进行 Day 7：无 AI 复写会话和消息查询、运行全部测试并复盘，随后进入第 3 周 LLM API 与手写 Agent。
 
 跨主机继续学习时，优先阅读仓库根目录的 `AI_AGENT_8W_HANDOFF.md`。
