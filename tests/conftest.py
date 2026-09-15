@@ -1,12 +1,24 @@
 from collections.abc import AsyncIterator
 
 import httpx
+import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from support_agent.config import Settings, get_settings
 from support_agent.db import Base, get_db
 from support_agent.main import app
+
+
+@pytest.fixture(autouse=True)
+def hermetic_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    """让测试不读开发者本机的 .env。
+
+    否则一旦在 .env 里填了真实模型配置，``llm_enabled`` 就会变真，
+    同一份代码在本机跑 pytest 和在 CI（没有 .env）跑会得到不同结果。
+    所以测试期间一律不加载 .env，配置只能由用例显式传进来。
+    """
+    monkeypatch.setitem(Settings.model_config, "env_file", None)
 
 
 @pytest_asyncio.fixture

@@ -12,7 +12,7 @@
 - IDE：PyCharm
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
 - 本地模式：SQLite，不需要模型 API、PostgreSQL、Redis 或 Docker
-- 基线：70 个测试通过，Ruff 检查通过（Day 4 结束时为 28，加入知识库导入测试后为 34，加入 Agent Loop 测试后为 46，接入 `POST /chat` 后为 70）
+- 基线：73 个测试通过，Ruff 检查通过（Day 4 结束时为 28，加入知识库导入测试后为 34，加入 Agent Loop 测试后为 46，接入 `POST /chat` 后为 70，接入真实模型适配后为 73）
 
 当前 PowerShell 无法自动加载 Conda 初始化脚本。只要 PyCharm 已选择上面的解释器，就可以直接使用：
 
@@ -364,7 +364,7 @@ rollback → 发生错误时撤销未提交修改
 
 面试表达按“业务问题 → 架构 → RAG → 工具与安全 → 测试评测 → 限制和下一步”组织。
 
-当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、真实分卷知识库导入、语料隔离与拒答阈值、混合检索、手写 Agent Loop 与 Tool Calling 适配层、模型选工具的主路径（`POST /chat` 已接入）、无 API Key 可跑的本地规则模型、写操作人工确认、会话历史回填与工具轨迹审计、LLM 有限重试、70 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
+当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、真实分卷知识库导入、语料隔离与拒答阈值、混合检索、手写 Agent Loop 与 Tool Calling 适配层、模型选工具的主路径（`POST /chat` 已接入）、接入真实 OpenAI 兼容服务（含思考模式模型的思维链回传）、无 API Key 可跑的本地规则模型、写操作人工确认、会话历史回填与工具轨迹审计、LLM 有限重试、73 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
 
 ## 17. 当前准确进度
 

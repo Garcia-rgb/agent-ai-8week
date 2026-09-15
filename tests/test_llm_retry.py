@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from support_agent.config import Settings
-from support_agent.services.llm import LLMError, OpenAICompatibleClient
+from support_agent.services.llm import AssistantTurn, LLMError, OpenAICompatibleClient
 
 
 def remote_settings() -> Settings:
@@ -97,3 +97,66 @@ async def test_invalid_response_is_not_retried() -> None:
     assert captured.value.retryable is False
     assert post.await_count == 1
     sleep.assert_not_awaited()
+
+
+def tool_call_message(**extra: object) -> dict:
+    """构造一条「模型要求调工具」的响应，extra 用于附加厂商扩展字段。"""
+    arguments = '{"expression": "1+1"}'
+    return {
+        "choices": [
+            {
+                "message": {
+                    "content": "",
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {"name": "calculator", "arguments": arguments},
+                        }
+                    ],
+                    **extra,
+                }
+            }
+        ]
+    }
+
+
+async def test_reasoning_content_is_kept_for_the_next_round() -> None:
+    """思考模式下思维链必须跟着 assistant 消息回传，否则续轮会被拒。"""
+    with patch("support_agent.services.llm.httpx.AsyncClient") as client_class:
+        post = client_class.return_value.__aenter__.return_value.post
+        post.return_value = response(200, tool_call_message(reasoning_content="先算 1+1"))
+
+        turn = await OpenAICompatibleClient(remote_settings()).chat_with_tools(
+            [{"role": "user", "content": "1+1"}],
+            tools=[{"type": "function", "function": {"name": "calculator"}}],
+        )
+
+    assert turn.reasoning_content == "先算 1+1"
+    message = turn.to_message()
+    assert message["reasoning_content"] == "先算 1+1"
+    assert message["tool_calls"][0]["function"]["name"] == "calculator"
+
+
+async def test_reasoning_content_is_absent_when_the_model_does_not_send_it() -> None:
+    """非思考模式的模型不带这个字段，回传的消息里也不应该凭空多出它。"""
+    with patch("support_agent.services.llm.httpx.AsyncClient") as client_class:
+        post = client_class.return_value.__aenter__.return_value.post
+        post.return_value = response(200, tool_call_message())
+
+        turn = await OpenAICompatibleClient(remote_settings()).chat_with_tools(
+            [{"role": "user", "content": "1+1"}],
+            tools=[{"type": "function", "function": {"name": "calculator"}}],
+        )
+
+    assert turn.reasoning_content is None
+    assert "reasoning_content" not in turn.to_message()
+
+
+def test_reasoning_content_with_a_wrong_type_is_ignored() -> None:
+    """厂商扩展字段格式异常时只当没有，不影响必需字段的校验。"""
+    turn = AssistantTurn.from_message({"content": "好的", "reasoning_content": {"text": "x"}})
+
+    assert turn.content == "好的"
+    assert turn.reasoning_content is None
+    assert "reasoning_content" not in turn.to_message()

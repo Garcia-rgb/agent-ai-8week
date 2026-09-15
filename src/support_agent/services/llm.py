@@ -38,6 +38,9 @@ class AssistantTurn:
 
     content: str
     tool_calls: list[ToolCallRequest] = field(default_factory=list)
+    # 思考模式下模型会先输出一段思维链，单独放在 reasoning_content 里。
+    # 默认关闭，缺省为 None，非思考模式的模型完全不受影响。
+    reasoning_content: str | None = None
 
     @property
     def wants_tools(self) -> bool:
@@ -56,6 +59,10 @@ class AssistantTurn:
                 }
                 for call in self.tool_calls
             ]
+        # 关键：携带 tools 的请求里，历史轮次的思维链必须原样回传，
+        # 否则 DeepSeek 这类思考模式模型会在下一轮直接返回 400。
+        if self.reasoning_content:
+            message["reasoning_content"] = self.reasoning_content
         return message
 
     @classmethod
@@ -85,7 +92,10 @@ class AssistantTurn:
                     arguments=arguments,
                 )
             )
-        return cls(content or "", calls)
+        # reasoning_content 是思考模式模型的厂商扩展字段：
+        # 是字符串就原样保留，缺失或格式异常都当作没有，不让它影响必需字段的校验。
+        reasoning = message.get("reasoning_content")
+        return cls(content or "", calls, reasoning if isinstance(reasoning, str) else None)
 
 
 class OpenAICompatibleClient:
@@ -126,6 +136,7 @@ class OpenAICompatibleClient:
             raise LLMError("未配置远程模型", "disabled", False)
         payload: dict[str, Any] = {
             "model": self.settings.llm_model,
+            # 思考模式下 temperature 不生效（不报错也不起作用），保留只是为了兼容非思考模式模型。
             "temperature": 0.1,
             "messages": messages,
         }

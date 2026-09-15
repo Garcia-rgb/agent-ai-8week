@@ -37,15 +37,34 @@ docker compose up --build
 
 ## 模型配置
 
-在 `.env` 中填写任意 OpenAI 兼容服务。不要提交真实密钥。
+配置文件是仓库根目录的 **`.env`**（已在 `.gitignore` 中，不要提交真实密钥）。
+把下面三行填好即可切到真实模型，三项**必须同时非空**，否则 `/chat` 会退回本地规则模型：
 
 ```dotenv
-LLM_BASE_URL=https://your-provider.example/v1
-LLM_API_KEY=replace-me
-LLM_MODEL=your-chat-model
+LLM_BASE_URL=https://api.deepseek.com
+LLM_MODEL=deepseek-v4-flash
+LLM_API_KEY=sk-你的密钥
 ```
 
-未配置这些变量时，`/chat` 会改用本地规则模型（`RuleBasedLocalModel`）驱动同一个 Agent Loop，返回检索片段，适合免费开发、离线演示和自动化测试。
+常见服务的取值：
+
+| 服务 | `LLM_BASE_URL` | `LLM_MODEL` |
+|---|---|---|
+| DeepSeek | `https://api.deepseek.com` | `deepseek-v4-flash` / `deepseek-v4-pro` |
+| OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
+| 任意兼容网关 | 网关根地址（代码会自动补 `/chat/completions`） | 网关给出的模型名 |
+
+填完后用自检脚本确认链路通了（会真实调用一次，不写数据库、不产生写操作）：
+
+```powershell
+python scripts/check_llm.py
+```
+
+需要说明的一点：DeepSeek V4 的思考模式**默认开启**，而携带 `tools` 的请求必须把历史轮次的
+`reasoning_content` 原样回传，否则续轮会被拒。适配层已经处理这件事；换成其他思考模式模型时，
+如果遇到第二轮 400，先怀疑这里。
+
+未配置这些变量时，`/chat` 会改用本地规则模型（`RuleBasedLocalModel`）驱动同一个 Agent Loop，返回检索片段，适合免费开发、离线演示和自动化测试。测试套件本身不读 `.env`（见 `tests/conftest.py` 的 `hermetic_settings`），所以本机填了真实密钥也不会改变 `pytest` 的结果。
 
 ## 架构
 

@@ -46,7 +46,7 @@ conda run -n agent-ai-8week python -m pytest -q
 - Conda 环境：`agent-ai-8week`
 - Python：3.12
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
-- 当前全量基线：70 个测试通过，Ruff 检查通过。
+- 当前全量基线：73 个测试通过，Ruff 检查通过。
 - PowerShell 的配置脚本受执行策略限制，终端可能无法直接识别 `conda`。PyCharm 选对解释器后直接使用 `python` 即可；也可以使用 `conda run -n agent-ai-8week ...`。
 - 2026-09-09 Windows 企业代码完整性策略曾阻止 conda-forge 的 OpenSSL 3.6.4；已用本机缓存的 defaults OpenSSL 3.5.7 离线修复。当前主机暂不执行 `conda env update -f environment.yml --prune`，避免恢复被拦截的 DLL。
 - 2026-09-11 已重新安装并验证 Docker Desktop；Compose 可正常启动 API、PostgreSQL/pgvector 和 Redis，三个容器均通过健康检查。
@@ -213,6 +213,7 @@ DELETE /tasks/{id}
 - 附加节（2026-09-15）SmartPV 知识库导入与检索隔离：新增 `services/knowledge_base.py` 与 `scripts/ingest_smartpv.py`，把本地 HCSA-SmartPV V2.0 分卷按章节导入 PostgreSQL/pgvector，章节元数据带 `corpus_id=smartpv_v2`、`visibility=local_only` 和 `restricted` 标记；账号密码、密码重置章节默认排除，需显式 `--include-restricted` 才导入。`RAGService.search()` 新增 `corpus_id`、`include_restricted`、`min_score` 三个参数，实现语料隔离与拒答阈值；`config.py` 新增 `retrieval_corpus_id` 与 `retrieval_min_score`，Compose 注入 `smartpv_v2` 和 `0.4`；检索命中为空时 `agent.py` 直接拒答、不调用模型。新增 `tests/test_knowledge_base.py` 的 6 个测试，全量基线更新为 `34 passed`，Ruff 通过。
 - Day 5（2026-09-15）：已手写「模型 → 工具 → 结果 → 模型」的最多 5 轮 Agent Loop。新增 `services/agent_loop.py`（`ToolSpec` 工具说明书、`build_tool_registry()` 服务端白名单、`parse_arguments()` 四道参数校验、`execute_tool_call()` 永不抛异常、`run_agent_loop()` 与 `LoopResult`/`ToolCallRecord`）；改写 `services/llm.py`，抽出共用的 `_chat()` 重试层并新增 `ToolCallRequest`、`AssistantTurn`、`chat_with_tools()`；新增 `tests/test_agent_loop.py` 的 12 个离线测试和 `examples/agent_loop_demo.py` 演示脚本。全量基线更新为 `46 passed`，Ruff 通过。关键区分：工具说明书（发给模型）≠ 工具白名单（服务端执行）；模型参数一律先校验再执行；轮数用尽后禁用工具强制收敛；写操作工具不自动执行。
 - Day 6（2026-09-15）：把 Agent Loop 接进 `POST /chat`，主路径不再是规则路由。新增 `services/local_model.py` 的 `RuleBasedLocalModel`（与远程客户端实现同一个 `chat_with_tools` 接口，无 API Key 时可跑完整链路）；`agent_loop.py` 扩展为支持异步工具 handler、`needs_confirmation` 结束状态、`history` 入参，并新增 `build_support_registry()` 挂载 `search_knowledge_base` 与 `create_ticket`；重写 `SupportAgent.respond()`，负责读历史、前置注入拦截、组装注册表、跑循环、提取引用与确认令牌、空检索兜底、写工具轨迹审计。`config.py` 新增 `agent_max_rounds`（5）与 `chat_history_limit`（10）。新增 `tests/test_local_model.py`（9 个）与 `tests/test_agent_integration.py`（12 个），`test_agent_loop.py` 增补 3 个。全量基线更新为 `70 passed`，Ruff 通过。
+- 接入真实模型（2026-09-15）：在 `.env` 中填入 `LLM_BASE_URL=https://api.deepseek.com`、`LLM_MODEL=deepseek-v4-flash`、`LLM_API_KEY` 即可切到真实模型。`AssistantTurn` 新增 `reasoning_content`，`to_message()` 会在回传消息里带上它——DeepSeek V4 思考模式默认开启，且携带 `tools` 的请求必须原样回传历史思维链，否则续轮返回 400。新增 `scripts/check_llm.py` 一键自检（真调一次问答 + 一次工具循环，不写库、不产生写操作）。同时修掉一个既有缺陷：`Settings` 会读本机 `.env`，导致填了真实密钥后本地 `pytest` 与 CI 结果不一致（8 个用例失败）；现在 `tests/conftest.py` 用 autouse fixture 把 `env_file` 置空，测试不再依赖本机 `.env`。新增 3 个 `reasoning_content` 回归测试，全量基线更新为 `73 passed`，Ruff 通过。
 - 下一步：进入 Day 7，关闭 AI 重写核心逻辑——让用户独立实现 `safe_calculate` 的受限 AST 求值与 `parse_arguments` 的参数校验，并为工具层的异常路径补评测样本。
 
 ## 8. 建议给下一台主机 Codex 的首条提示词
@@ -220,14 +221,14 @@ DELETE /tasks/{id}
 用户可以在新对话中发送：
 
 ```text
-请先读取仓库根目录的 AI_AGENT_8W_HANDOFF.md、LEARNING_README.md、INTERVIEW_README.md、README.md 和 course/README.md，接着当前学习进度继续。第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 6 已完成。LLM 客户端已实现错误分类、有限重试和工具调用适配；`services/agent_loop.py` 手写了最多 5 轮的 Agent Loop（含工具白名单、参数校验、写操作确认、轮数用尽强制收敛）；Day 6 已把该循环接进 `POST /chat`，主路径是「模型选工具、服务端校验执行」，并新增 `RuleBasedLocalModel`，使无 API Key 时也能跑完整链路。此外已完成附加节「SmartPV 知识库导入与检索隔离」，检索层支持 corpus_id 语料隔离与最低相关度阈值，命中为空时直接拒答。项目基线为 70 passed。下一步进入 Day 7：让用户关闭 AI 独立重写 `safe_calculate` 的受限 AST 求值与 `parse_arguments` 的参数校验，并为工具层异常路径补评测样本。请用中文、概念优先、少讲不必要语法。每节最后设置两道能够从当节内容推导的面试级问题；每节完成后，把题目、标准答案、30 秒表达和项目对应情况追加到 INTERVIEW_README.md，不记录用户原始回答。不要把讲过等同于已经掌握。
+请先读取仓库根目录的 AI_AGENT_8W_HANDOFF.md、LEARNING_README.md、INTERVIEW_README.md、README.md 和 course/README.md，接着当前学习进度继续。第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 6 已完成。LLM 客户端已实现错误分类、有限重试和工具调用适配；`services/agent_loop.py` 手写了最多 5 轮的 Agent Loop（含工具白名单、参数校验、写操作确认、轮数用尽强制收敛）；Day 6 已把该循环接进 `POST /chat`，主路径是「模型选工具、服务端校验执行」，并新增 `RuleBasedLocalModel`，使无 API Key 时也能跑完整链路。此外已完成附加节「SmartPV 知识库导入与检索隔离」，检索层支持 corpus_id 语料隔离与最低相关度阈值，命中为空时直接拒答。项目基线为 73 passed。此外已接入真实模型：在 `.env` 填 `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY` 即切换到远程模型，适配层已处理思考模式的 `reasoning_content` 回传，`scripts/check_llm.py` 可一键自检；测试套件不读 `.env`，与本机配置无关。下一步进入 Day 7：让用户关闭 AI 独立重写 `safe_calculate` 的受限 AST 求值与 `parse_arguments` 的参数校验，并为工具层异常路径补评测样本。请用中文、概念优先、少讲不必要语法。每节最后设置两道能够从当节内容推导的面试级问题；每节完成后，把题目、标准答案、30 秒表达和项目对应情况追加到 INTERVIEW_README.md，不记录用户原始回答。不要把讲过等同于已经掌握。
 ```
 
 ## 9. 新主机开始前的核对清单
 
 1. `git pull` 后确认存在本文件、`LEARNING_README.md` 和 `INTERVIEW_README.md`。
 2. 创建或同步 Conda 环境，不要硬编码当前主机的解释器路径。
-3. 从 `.env.example` 创建 `.env`；默认先不要填写真实模型密钥。
-4. 运行种子脚本、70 个测试和 Ruff。
+3. 从 `.env.example` 创建 `.env`。默认留空即可（走本地规则模型）；若要接真实模型，填入 `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` 三项后再运行 `python scripts/check_llm.py` 自检。`.env` 不进 Git，密钥不要跨主机传输。
+4. 运行种子脚本、73 个测试和 Ruff。
 5. 启动服务并打开 Swagger。
 6. 先确认用户希望继续“全貌讲解”，不要擅自重头重复 Python 基础。
