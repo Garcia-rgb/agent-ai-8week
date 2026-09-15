@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     confirmation_secret: str = "development-only-secret"
     max_upload_bytes: int = 5 * 1024 * 1024
     retrieval_top_k: int = 5
+    retrieval_corpus_id: str | None = None
+    retrieval_min_score: float = 0.0
     chunk_size: int = 700
     chunk_overlap: int = 100
 

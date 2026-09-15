@@ -1,7 +1,7 @@
 # 学习记录｜阶段 1：Python、FastAPI 与 Agent 基础流程
 
-> 整理日期：2026-09-11
-> 当前进度：项目全貌和压缩版第 1 周已完成；第 2 周 Day 1～Day 6 已完成第一轮实操，下一步进行 Day 7 无 AI 复盘与验收。详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`。
+> 整理日期：2026-09-14
+> 当前进度：第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 4 已完成第一轮学习和代码实操，下一步进入 Day 5 手写 Agent Loop。详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`，面试题见 `INTERVIEW_README.md`。
 
 ## 1. 当前环境
 
@@ -12,7 +12,7 @@
 - IDE：PyCharm
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
 - 本地模式：SQLite，不需要模型 API、PostgreSQL、Redis 或 Docker
-- 基线：23 个测试通过，Ruff 检查通过
+- 基线：28 个测试通过，Ruff 检查通过
 
 当前 PowerShell 无法自动加载 Conda 初始化脚本。只要 PyCharm 已选择上面的解释器，就可以直接使用：
 
@@ -330,7 +330,7 @@ rollback → 发生错误时撤销未提交修改
 - 接口测试从 HTTP 入口经过校验、业务逻辑和数据库，再检查响应。
 - 工作流测试检查多个步骤及业务规则，例如“申请工单确认 → 首次创建成功 → 重复令牌返回 409”。
 - `tests/conftest.py` 使用临时数据库和 FastAPI 依赖替换，不污染日常使用的 `support_agent.db`。
-- 用户已在 PyCharm 中亲自运行工具测试、API 测试和全量测试；随着分页、Mock 和事务回滚测试加入，当前基线为 `23 passed`。
+- 用户已在 PyCharm 中亲自运行工具测试、API 测试和全量测试；第 2 周结束时基线为 `23 passed`，加入 LLM 重试测试后更新为 `28 passed`。
 - 测试通过只代表已有测试覆盖的行为符合预期，不代表真实模型、网络和所有边界情况都没有问题。
 
 ## 15. Docker、健康检查与 CI
@@ -362,7 +362,7 @@ rollback → 发生错误时撤销未提交修改
 
 面试表达按“业务问题 → 架构 → RAG → 工具与安全 → 测试评测 → 限制和下一步”组织。
 
-当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、混合检索、规则路由、安全工具、23 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称真实 LLM Tool Calling、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
+当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、混合检索、规则路由、安全工具、LLM 有限重试、28 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称真实 LLM Tool Calling、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
 
 ## 17. 当前准确进度
 
@@ -380,7 +380,7 @@ rollback → 发生错误时撤销未提交修改
 - 内存版练习测试为 `2 passed`；Ruff 检查通过。
 - 当前数据保存在进程内存的 `tasks` 列表中，服务器重启后会消失，这是进入数据库学习的直接问题。
 
-## 19. 第 2 周数据库与 SQLAlchemy（进行中）
+## 19. 第 2 周数据库、测试与 Docker（第一轮完成）
 
 - 用户通过停止并重启服务，亲自观察到内存版任务消失、SQLite 版任务仍然存在，理解了持久化的作用。
 - 新增 `exercises/week02/task_api_sqlite.py`，使用原生 SQLite SQL 实现完整任务 CRUD。
@@ -403,8 +403,45 @@ rollback → 发生错误时撤销未提交修改
 - 修复后 SSL 导入、19 项测试、Uvicorn、SQLAlchemy `POST /tasks` 和 `GET /tasks` 均验证成功。
 - 当前主机暂时不要直接执行 `conda env update -f environment.yml --prune`，否则 conda-forge OpenSSL 可能被重新安装。其他主机如果没有企业签名策略，可继续按原环境文件使用。
 
+## 21. 第 3 周 LLM API 与工具调用（进行中）
+
+### Day 1：Token、上下文与生成参数
+
+- 已理解 Token 是模型处理和计费的基本单位，不等同于固定字数。
+- 已理解上下文包含系统指令、用户问题、历史对话、RAG 资料、工具结果和模型输出空间。
+- 能判断历史对话和 RAG 资料通常是优先压缩对象，不能随意删除安全指令和当前问题。
+- 已理解低 `temperature` 更适合提取、分类和结构化工具参数，高值更适合创意任务；`temperature=0` 也不保证绝对确定。
+- 成本只要求理解输入、输出分别计费以及多轮 Agent 会增加费用和延迟，不继续练习手工费用计算。
+
+### Day 2：Prompt、Few-shot 与结构化输出
+
+- 已理解应用指令、业务资料和用户输入的信任边界；RAG 文档中的文字属于数据，不能改变系统权限。
+- 已理解 Prompt Injection 不能只靠提示词拦截，最终权限和写操作校验必须在服务端完成。
+- 已学习 Few-shot 用示例提高输出格式稳定性，但不能替代 Pydantic 和业务权限校验。
+- 已区分格式校验与业务校验：合法的工具名和订单号格式不代表当前用户有权查询该订单。
+- 已阅读 `src/support_agent/services/llm.py`，理解无远程配置时的 `local_answer()` 只是 Python 拼接检索片段，不是本地 LLM。
+
+### Day 3：手写工具调用边界
+
+- 已阅读并运行 `examples/manual_agent.py`，正常得到计算结果和模拟订单结果。
+- 已理解模型看到的工具说明只用于帮助选择工具，服务端 `TOOLS` 注册表才决定允许执行的函数。
+- 已理解合法 JSON 仍可能缺字段、类型错误或格式错误，执行前仍需参数模型、权限检查和高风险操作确认。
+- 用户选择跳过未知工具和损坏 JSON 的简单报错实验，不影响核心概念学习。
+
+### Day 4：超时、重试、错误映射与降级
+
+- 已理解 `400/401` 等确定性问题通常不重试，`429/503/网络超时` 等暂时性故障可以有限重试。
+- 已理解指数退避、最大尝试次数和总时间上限的目的，以及无限重试对费用、延迟、服务压力和重复执行的风险。
+- 已理解底层模型客户端负责异常分类、有限重试和错误映射，上层 Agent 负责业务降级和会话保存。
+- 已分析当前 `200 + 友好提示` 的优点和监控缺陷，理解可通过结构化 `degraded` 状态区分正常回答与降级回答。
+- 两道面试题及整理后的答案已写入 `INTERVIEW_README.md`。
+- 已在 `services/llm.py` 实现最多三次尝试：`401/403` 等确定性错误不重试，`429/500/502/503/504`、超时和网络异常有限重试，响应结构损坏直接映射为不可重试错误。
+- `LLMError` 新增 `category` 和 `retryable`，在不泄露厂商异常的同时为上层判断保留结构化信息。
+- 新增 `tests/test_llm_retry.py` 的 5 个 Mock 测试，不访问真实模型；项目全量测试更新为 `28 passed`，Ruff 通过。
+- 当前尚未实现结构化降级响应、模型故障指标、随机抖动、服务端等待提示和总重试时间预算。
+
 ## 下一阶段
 
-第 2 周 Day 1～Day 6 已完成第一轮讲解与实操：数据库 CRUD、索引、事务、约束、外键、SQLAlchemy、依赖注入、pytest Fixture/Mock、会话分页、事务回滚和 Docker Compose。下一步进行 Day 7：无 AI 复写会话和消息查询、运行全部测试并复盘，随后进入第 3 周 LLM API 与手写 Agent。
+进入第 3 周 Day 5：手写“模型选择工具 → 服务端校验和执行 → 工具结果回传模型”的最多 5 轮 Agent Loop。完成本节后，将两道面试题和标准答案追加到 `INTERVIEW_README.md`，并再次更新阶段进度。
 
 跨主机继续学习时，优先阅读仓库根目录的 `AI_AGENT_8W_HANDOFF.md`。

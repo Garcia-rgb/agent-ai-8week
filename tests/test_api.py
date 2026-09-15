@@ -59,5 +59,5 @@ async def test_chat_uses_llm_answer_without_real_network(client: httpx.AsyncClie
         )
 
     assert response.status_code == 200
-    assert response.json()["answer"] == "模拟模型回答"
-    mock_answer.assert_awaited_once_with("怎么修改账户昵称？", [])
+    assert "没有找到足够可靠的依据" in response.json()["answer"]
+    mock_answer.assert_not_awaited()

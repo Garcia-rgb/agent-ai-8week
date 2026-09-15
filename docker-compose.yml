@@ -11,6 +11,8 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
+      RETRIEVAL_CORPUS_ID: smartpv_v2
+      RETRIEVAL_MIN_SCORE: "0.4"
     depends_on:
       postgres:
         condition: service_healthy
@@ -31,6 +33,8 @@ services:
 
   postgres:
     image: pgvector/pgvector:pg16
+    ports:
+      - "127.0.0.1:5433:5432"
     environment:
       POSTGRES_DB: agent
       POSTGRES_USER: agent

@@ -82,6 +82,7 @@ flowchart LR
 ## 仓库导航
 
 - `course/`：8 周日程、验收与复盘问题
+- `INTERVIEW_README.md`：按章节维护的面试题、标准答案与项目对应情况
 - `src/support_agent/`：应用代码
 - `sample_data/`：可导入的演示知识库
 - `evals/dataset.jsonl`：40 条固定评测样本

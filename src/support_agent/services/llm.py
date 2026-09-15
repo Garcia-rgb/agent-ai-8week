@@ -1,12 +1,21 @@
+import asyncio
 from typing import Any
 
 import httpx
 
 from ..config import Settings
 
+MAX_ATTEMPTS = 3
+RETRYABLE_STATUS_CODES = {429, 500, 502, 503, 504}
+
 
 class LLMError(RuntimeError):
-    pass
+    """屏蔽模型厂商异常，同时保留可供上层判断的错误类别。"""
+
+    def __init__(self, message: str, category: str, retryable: bool):
+        super().__init__(message)
+        self.category = category
+        self.retryable = retryable
 
 
 class OpenAICompatibleClient:
@@ -36,14 +45,35 @@ class OpenAICompatibleClient:
         }
         url = f"{self.settings.llm_base_url.rstrip('/')}/chat/completions"
         headers = {"Authorization": f"Bearer {self.settings.llm_api_key}"}
-        try:
-            # 网络请求只放在适配器中，上层 Agent 不需要关心具体接口格式。
-            async with httpx.AsyncClient(timeout=30) as client:
-                response = await client.post(url, json=payload, headers=headers)
-                response.raise_for_status()
-                return response.json()["choices"][0]["message"]["content"]
-        except (httpx.HTTPError, KeyError, IndexError, TypeError) as exc:
-            raise LLMError("模型服务暂时不可用") from exc
+        # 网络请求只放在适配器中，上层 Agent 不需要关心具体接口格式。
+        async with httpx.AsyncClient(timeout=30) as client:
+            for attempt in range(MAX_ATTEMPTS):
+                try:
+                    response = await client.post(url, json=payload, headers=headers)
+                    response.raise_for_status()
+                    content = response.json()["choices"][0]["message"]["content"]
+                    if not isinstance(content, str) or not content:
+                        raise ValueError("模型回答不是非空字符串")
+                    return content
+                except httpx.HTTPStatusError as exc:
+                    status_code = exc.response.status_code
+                    retryable = status_code in RETRYABLE_STATUS_CODES
+                    if not retryable:
+                        category = (
+                            "authentication" if status_code in {401, 403} else "request"
+                        )
+                        raise LLMError("模型服务拒绝了请求", category, False) from exc
+                    if attempt == MAX_ATTEMPTS - 1:
+                        category = "rate_limit" if status_code == 429 else "service"
+                        raise LLMError("模型服务暂时不可用", category, True) from exc
+                except (httpx.TimeoutException, httpx.NetworkError) as exc:
+                    if attempt == MAX_ATTEMPTS - 1:
+                        raise LLMError("模型服务网络异常", "network", True) from exc
+                except (ValueError, KeyError, IndexError, TypeError) as exc:
+                    raise LLMError("模型响应格式不正确", "invalid_response", False) from exc
+
+                # 第一次失败等 1 秒，第二次失败等 2 秒；测试中会 Mock 掉真实等待。
+                await asyncio.sleep(2**attempt)
 
     @staticmethod
     def local_answer(contexts: list[str]) -> str:

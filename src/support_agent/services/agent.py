@@ -93,12 +93,20 @@ class SupportAgent:
             )
         else:
             # 知识问答先检索相关片段，再让模型依据片段组织答案。
-            hits = await self.rag.search(text, self.settings.retrieval_top_k)
+            hits = await self.rag.search(
+                text,
+                self.settings.retrieval_top_k,
+                corpus_id=self.settings.retrieval_corpus_id,
+                min_score=self.settings.retrieval_min_score,
+            )
             citations = self.rag.citations(hits)
-            try:
-                answer = await self.llm.answer(text, [hit.chunk.content for hit in hits])
-            except LLMError:
-                answer = "模型服务暂时不可用，已保留会话，请稍后重试。"
+            if not hits:
+                answer = "当前知识库没有找到足够可靠的依据，请补充问题信息或转人工确认。"
+            else:
+                try:
+                    answer = await self.llm.answer(text, [hit.chunk.content for hit in hits])
+                except LLMError:
+                    answer = "模型服务暂时不可用，已保留会话，请稍后重试。"
 
         assistant_message = await self._save_message(
             conversation.id,

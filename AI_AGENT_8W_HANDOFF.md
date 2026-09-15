@@ -1,7 +1,7 @@
 # AI Agent / AI 应用开发 8 周转型计划｜跨主机交接
 
-> 更新日期：2026-09-11
-> 用途：在另一台主机继续本项目和学习对话。新 Codex 应先读本文件，再读 `LEARNING_README.md`、`README.md` 和 `course/README.md`。
+> 更新日期：2026-09-14
+> 用途：在另一台主机继续本项目和学习对话。新 Codex 应先读本文件，再读 `LEARNING_README.md`、`INTERVIEW_README.md`、`README.md` 和 `course/README.md`。
 
 ## 学员目标与学习策略
 
@@ -46,7 +46,7 @@ conda run -n agent-ai-8week python -m pytest -q
 - Conda 环境：`agent-ai-8week`
 - Python：3.12
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
-- 当前全量基线：23 个测试通过，Ruff 检查通过。
+- 当前全量基线：28 个测试通过，Ruff 检查通过。
 - PowerShell 的配置脚本受执行策略限制，终端可能无法直接识别 `conda`。PyCharm 选对解释器后直接使用 `python` 即可；也可以使用 `conda run -n agent-ai-8week ...`。
 - 2026-09-09 Windows 企业代码完整性策略曾阻止 conda-forge 的 OpenSSL 3.6.4；已用本机缓存的 defaults OpenSSL 3.5.7 离线修复。当前主机暂不执行 `conda env update -f environment.yml --prune`，避免恢复被拦截的 DLL。
 - 2026-09-11 已重新安装并验证 Docker Desktop；Compose 可正常启动 API、PostgreSQL/pgvector 和 Redis，三个容器均通过健康检查。
@@ -72,6 +72,9 @@ Swagger：`http://127.0.0.1:8000/docs`
 - 用户认可先讲完整项目全貌，再快速回顾第 1 周，随后从第 2 周进入更正式的动手学习。
 - 第 1 周不要耗费太久：用一个小型 FastAPI 任务 CRUD 在 1～2 个学习回合内压缩验收，基础语法随用随补。
 - 教学节奏宜短：讲一个概念，给一个可观察的小实验，再让用户说出自己的判断。
+- 从第 3 周 Day 4 起，每节结尾固定设置两道面试级问题。问题必须能从当节教学内容中推导，重点考查原理、设计取舍和项目实现，不再使用过于简单的事实复述题。
+- 每节完成后，将两道面试题、标准答案、30 秒表达和项目对应情况追加到根目录 `INTERVIEW_README.md`；不记录用户的原始回答。
+- 每完成一个阶段，应同步更新本文件和 `LEARNING_README.md`，并明确标注“概念讲解、引导实操、独立验收、代码实现”分别完成到哪一步。
 
 ## 4. 已完成的环境与项目工作
 
@@ -128,7 +131,7 @@ Swagger：`http://127.0.0.1:8000/docs`
 - 区分聊天历史、Agent 临时状态和长期用户记忆。
 - 当前项目会保存会话，但不会把历史重新送入回答和路由，因此还不具备真正的语义记忆。
 - 已讲上下文窗口、摘要、检索和结构化状态。
-- 已讲超时、重试、幂等和降级；当前 LLM 客户端为 30 秒超时，没有自动重试。
+- 已讲并实现 LLM 超时、有限重试、错误分类与降级；当前客户端最多尝试三次，暂时性错误采用 1 秒、2 秒退避，确定性请求错误和响应结构错误不重试。
 - 已讲结构化请求日志：`request_id`、路径、状态码和 `duration_ms`。
 - 当前日志能看整个 HTTP 请求耗时，还不能细分检索、数据库、工具和模型各阶段耗时。
 
@@ -160,7 +163,7 @@ Swagger：`http://127.0.0.1:8000/docs`
 
 因此不能简单记录为“学到第 6 周”。更准确的说法是：
 
-> 项目全貌第一遍和压缩版第 1 周已完成；第 2 周 Day 1～Day 6 已完成第一轮讲解与实操，下一步进行 Day 7 无 AI 复盘与验收。
+> 项目全貌第一遍和压缩版第 1 周已完成；第 2 周已完成第一轮讲解、引导实操和引导式复习。第 3 周 Day 1～Day 4 已完成第一轮学习和代码实操，下一步进入 Day 5 手写 Agent Loop。
 
 ## 7. 约定的后续顺序
 
@@ -194,21 +197,30 @@ DELETE /tasks/{id}
 - `.dockerignore`
 - `docker-compose.yml` 的 API 健康检查
 
-全量测试为 `23 passed`。Docker Compose 已真实构建并启动 API、PostgreSQL/pgvector、Redis；已将 4 份 `sample_data` 文档导入 PostgreSQL并完成一次端到端 RAG 问答。下一步是第 2 周 Day 7：无 AI 复写会话/消息查询、运行全部测试并复盘，然后进入第 3 周 LLM API 与手写 Agent。
+完成第 2 周时全量测试为 `23 passed`。Docker Compose 已真实构建并启动 API、PostgreSQL/pgvector、Redis；已将 4 份 `sample_data` 文档导入 PostgreSQL 并完成一次端到端 RAG 问答。第 2 周 Day 7 已完成引导式复习与会话查询练习，但尚未完成完全无提示的闭卷重写。
+
+### 阶段 D：第 3 周 LLM API 与手写 Agent（进行中）
+
+- Day 1：已学习 Token、上下文窗口、输入/输出成本、`temperature` 和最大输出长度。
+- Day 2：已学习指令与数据边界、Prompt Injection、Few-shot、结构化输出，并阅读 `services/llm.py` 的 Prompt 与请求结构。
+- Day 3：已阅读并运行 `examples/manual_agent.py`，理解工具说明、服务端白名单、JSON 参数和执行权限之间的区别。
+- Day 4：已学习并实现 `401/429/503/超时/响应损坏` 的分类、有限重试、退避等待、错误映射和 Agent 降级；完成两道面试题并建立 `INTERVIEW_README.md`。
+- Day 4 代码状态：新增 `tests/test_llm_retry.py` 的 5 个 Mock 测试；全量基线更新为 `28 passed`，Ruff 通过。尚未实现结构化降级字段、模型故障指标、随机抖动和总时间预算。
+- 下一步：进入 Day 5，手写“模型选择工具 → 服务端执行 → 工具结果回传模型”的最多 5 轮 Agent Loop。
 
 ## 8. 建议给下一台主机 Codex 的首条提示词
 
 用户可以在新对话中发送：
 
 ```text
-请先读取仓库根目录的 AI_AGENT_8W_HANDOFF.md、LEARNING_README.md、README.md 和 course/README.md，接着当前学习进度继续。项目全貌第一遍和压缩版第 1 周已经完成；第 2 周 Day 1～Day 6 已在引导下完成，包含 SQL/SQLAlchemy、事务、依赖注入、pytest Fixture/Mock、会话分页、事务回滚及 Docker Compose 实操，当前全量测试为 23 passed。下一步进行第 2 周 Day 7 无 AI 复盘与验收，然后进入第 3 周。请用中文、概念优先、少讲不必要的语法；优先让我通过小实验观察现象，再补关键代码和测试。不要把讲过等同于已经掌握。
+请先读取仓库根目录的 AI_AGENT_8W_HANDOFF.md、LEARNING_README.md、INTERVIEW_README.md、README.md 和 course/README.md，接着当前学习进度继续。第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 4 已完成，LLM 客户端已经实现错误分类和有限重试，项目基线为 28 passed。下一步进入 Day 5，手写最多 5 轮的 Agent Loop。请用中文、概念优先、少讲不必要语法。每节最后设置两道能够从当节内容推导的面试级问题；每节完成后，把题目、标准答案、30 秒表达和项目对应情况追加到 INTERVIEW_README.md，不记录用户原始回答。不要把讲过等同于已经掌握。
 ```
 
 ## 9. 新主机开始前的核对清单
 
-1. `git pull` 后确认存在本文件和 `LEARNING_README.md`。
+1. `git pull` 后确认存在本文件、`LEARNING_README.md` 和 `INTERVIEW_README.md`。
 2. 创建或同步 Conda 环境，不要硬编码当前主机的解释器路径。
 3. 从 `.env.example` 创建 `.env`；默认先不要填写真实模型密钥。
-4. 运行种子脚本、23 个测试和 Ruff。
+4. 运行种子脚本、28 个测试和 Ruff。
 5. 启动服务并打开 Swagger。
 6. 先确认用户希望继续“全貌讲解”，不要擅自重头重复 Python 基础。

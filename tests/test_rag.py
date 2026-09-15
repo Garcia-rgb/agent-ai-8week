@@ -18,3 +18,5 @@ async def test_ingest_deduplicate_and_search(db_session: AsyncSession) -> None:
     hits = await rag.search("退款多久到账")
     assert hits
     assert "三个工作日" in hits[0].chunk.content
+
+    assert await rag.search("完全无关的问题", min_score=0.99) == []
