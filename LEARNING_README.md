@@ -1,7 +1,7 @@
 # 学习记录｜阶段 1：Python、FastAPI 与 Agent 基础流程
 
-> 整理日期：2026-09-14
-> 当前进度：第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 4 已完成第一轮学习和代码实操，下一步进入 Day 5 手写 Agent Loop。详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`，面试题见 `INTERVIEW_README.md`。
+> 整理日期：2026-09-15
+> 当前进度：第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 4 已完成，并完成附加节《SmartPV 知识库导入与检索隔离》，下一步进入 Day 5 手写 Agent Loop。详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`，面试题见 `INTERVIEW_README.md`。
 
 ## 1. 当前环境
 
@@ -12,7 +12,7 @@
 - IDE：PyCharm
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
 - 本地模式：SQLite，不需要模型 API、PostgreSQL、Redis 或 Docker
-- 基线：28 个测试通过，Ruff 检查通过
+- 基线：34 个测试通过，Ruff 检查通过（Day 4 结束时为 28，加入知识库导入测试后为 34）
 
 当前 PowerShell 无法自动加载 Conda 初始化脚本。只要 PyCharm 已选择上面的解释器，就可以直接使用：
 
@@ -362,7 +362,7 @@ rollback → 发生错误时撤销未提交修改
 
 面试表达按“业务问题 → 架构 → RAG → 工具与安全 → 测试评测 → 限制和下一步”组织。
 
-当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、混合检索、规则路由、安全工具、LLM 有限重试、28 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称真实 LLM Tool Calling、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
+当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、真实分卷知识库导入、语料隔离与拒答阈值、混合检索、规则路由、安全工具、LLM 有限重试、34 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称真实 LLM Tool Calling、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
 
 ## 17. 当前准确进度
 
@@ -439,6 +439,53 @@ rollback → 发生错误时撤销未提交修改
 - `LLMError` 新增 `category` 和 `retryable`，在不泄露厂商异常的同时为上层判断保留结构化信息。
 - 新增 `tests/test_llm_retry.py` 的 5 个 Mock 测试，不访问真实模型；项目全量测试更新为 `28 passed`，Ruff 通过。
 - 当前尚未实现结构化降级响应、模型故障指标、随机抖动、服务端等待提示和总重试时间预算。
+
+### 附加节：SmartPV 知识库导入与检索隔离（2026-09-15）
+
+> 本节是插在 Day 4 之后的工程实践节：把真实本地知识库导入 PostgreSQL/pgvector，并给检索加上语料隔离、敏感章节过滤和拒答阈值。原计划的 Day 5（手写 Agent Loop）顺延到本节之后。
+
+**为什么需要这一节**
+
+- 之前演示只用了 `sample_data` 的 4 份示例文档，语料太少、噪声太低，检索分数好看但不代表真实效果。
+- 接入真实分卷知识库后，库里会同时存在演示文档和正式资料，必须在检索层就把范围收窄，否则相似度分数会在无关语料之间互相干扰。
+- 真实资料里包含账号、密码、默认口令一类内容，这些既不能进普通问答，也不适合放进可以被检索到的位置。
+
+**语料结构与解析（`src/support_agent/services/knowledge_base.py`，新增）**
+
+- 知识库根目录由 `SMARTPV_KB_PATH` 指定，包含 `HCSA-SmartPV-V2.0-index.json` 与 `HCSA-SmartPV-V2.0-知识库分卷/` 两部分。
+- 索引 JSON 提供 `modules` 和 `appendices` 两组条目，每条包含 `id`、`title`、`pages`（如 `p1–36`）。
+- 分卷文件按 `模块M1-*.md`、`附录A-*.md` 命名；脚本校验每个条目只能匹配到一份分卷，多份或零份都直接报错，避免静默漏导。
+- 章节切分优先按 Markdown 二级标题 `##` 切；整篇没有 `##` 时（M9/M12 这类分卷）退化为按独立粗体行 `**小节名**` 切分。
+- 每一个章节生成一个 `KnowledgeChunk`，携带来源元数据：`document_id`、`document_title`、`section_title`、`page_start`/`page_end`、`source_file`、`corpus_id`、`visibility`、`restricted`。
+- `corpus_id` 固定为 `smartpv_v2`，`visibility` 为 `local_only`，用于后续做范围隔离和权限判断。
+- 标题命中「账号、密码与默认值」「密码重置」的章节默认跳过；只有显式传入 `--include-restricted` 才会导入，并把 `restricted` 标记为 `True`。
+
+**导入流程（`RAGService.ingest_smartpv_corpus` 与 `scripts/ingest_smartpv.py`，新增）**
+
+- 按分卷文件分组后逐个导入，用文件 SHA-256 与已有的 `SourceDocument.checksum` 比对，重复导入直接记为 `documents_skipped`，与 `POST /documents` 的去重策略保持一致。
+- 每个章节先按 `chunk_size=700`、`overlap=100` 二次切块，再把章节元数据原样写进 `DocumentChunk.chunk_metadata`。
+- 导入完成后打印 `新文档 / 跳过 / 章节 / 检索片段` 四项统计，便于核对规模。
+- PostgreSQL 侧沿用 pgvector 镜像，Compose 中把数据库端口改为 `127.0.0.1:5433:5432`：只绑定本机回环地址，不暴露给局域网，同时避开本机已占用的 5432。
+
+**检索隔离与拒答阈值（`src/support_agent/services/rag.py`、`services/agent.py`、`config.py`）**
+
+- `RAGService.search()` 新增三个参数：`corpus_id`、`include_restricted`、`min_score`。
+- `corpus_id` 过滤：章节元数据的 `corpus_id` 与目标不一致就直接跳过。这样示例文档和正式资料即使都被切块入库，也不会互相进入对方的检索结果。
+- `restricted` 过滤：没有显式放行时，`restricted` 为 `True` 的章节不参与检索。
+- 打分仍为混合检索 `0.55 * 词面 + 0.45 * 向量`，但只有同时满足 `score > 0` 且 `score >= min_score` 的片段才算命中。
+- `config.py` 新增 `retrieval_corpus_id`（默认 `None`）和 `retrieval_min_score`（默认 `0.0`）；Compose 的 API 服务注入 `RETRIEVAL_CORPUS_ID=smartpv_v2`、`RETRIEVAL_MIN_SCORE=0.4`。
+- `agent.py` 把这两个配置传进检索；**当 `hits` 为空时直接拒答**（「当前知识库没有找到足够可靠的依据，请补充问题信息或转人工确认。」），不再调用模型。
+- 拒答发生在调用模型之前，因此既避免了用无用片段让模型硬编答案，也省掉了一次模型调用成本。
+
+**测试与基线**
+
+- 新增 `tests/test_knowledge_base.py` 的 6 个测试：`##` 切分、独立粗体切分、默认排除受限章节并写入元数据、`include_restricted=True` 时保留并打标记、分卷缺失时报错、导入后元数据落库且 `corpus_id` 检索隔离生效（含用 `missing_corpus` 查询返回空）。
+- 全量测试由 `28 passed` 更新为 `34 passed`，Ruff 检查通过。
+
+**掌握程度**
+
+- 本节属于概念讲解 + 引导下实操：用户能够说明语料隔离和拒答阈值各自解决什么问题、为什么两者不能只留一个。
+- 尚未独立实现的部分：阈值调参流程、按用户或租户动态切换 `corpus_id`、受限章节的独立授权访问通道。
 
 ## 下一阶段
 
