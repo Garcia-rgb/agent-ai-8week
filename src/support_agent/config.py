@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     retrieval_min_score: float = 0.0
     chunk_size: int = 700
     chunk_overlap: int = 100
+    # 单个请求最多允许模型来回几轮；轮数用尽后服务端会禁用工具强制收敛。
+    agent_max_rounds: int = 5
+    # 注入给模型的历史消息条数上限，避免长会话把提示词越堆越大。
+    chat_history_limit: int = 10
 
     @property
     def llm_enabled(self) -> bool:

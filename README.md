@@ -2,7 +2,7 @@
 
 这是一个同时用于学习、作品集和面试讲解的仓库。项目覆盖 FastAPI、数据库、RAG、LangGraph、工具调用、人工确认、安全审计、离线评测、测试和 Docker。
 
-默认模式不需要模型 API、PostgreSQL 或 Redis：SQLite 保存数据，确定性本地模型展示检索结果。接入 OpenAI 兼容接口后，系统会基于检索资料生成回答。
+默认模式不需要模型 API、PostgreSQL 或 Redis：SQLite 保存数据，本地规则模型驱动同一个 Agent Loop，展示检索结果。接入 OpenAI 兼容接口后，改由真实模型决定调用哪个工具并组织回答，链路和校验完全一致。
 
 ## 快速开始（Windows PowerShell）
 
@@ -45,33 +45,35 @@ LLM_API_KEY=replace-me
 LLM_MODEL=your-chat-model
 ```
 
-未配置这些变量时，`/chat` 会返回检索片段，适合免费开发和自动化测试。
+未配置这些变量时，`/chat` 会改用本地规则模型（`RuleBasedLocalModel`）驱动同一个 Agent Loop，返回检索片段，适合免费开发、离线演示和自动化测试。
 
 ## 架构
 
 ```mermaid
 flowchart LR
     U[用户 / Swagger] --> API[FastAPI]
-    API --> G[LangGraph 路由]
-    G --> SAFE[安全检查]
-    G --> RAG[混合检索]
-    G --> TOOLS[订单/计算/工单工具]
+    API --> SAFE[提示词注入拦截]
+    SAFE --> LOOP[Agent Loop｜最多 5 轮]
+    LOOP <--> MODEL[模型：远程 API 或本地规则模型]
+    MODEL -. 本地模式 .-> GRAPH[LangGraph 规则分类]
+    LOOP --> TOOLS[工具白名单：知识库检索 / 订单 / 计算 / 工单]
+    TOOLS --> RAG[混合检索]
     RAG --> PG[(PostgreSQL + pgvector)]
-    RAG --> LLM[OpenAI 兼容模型]
-    TOOLS --> CONFIRM[人工确认]
+    TOOLS --> CONFIRM[人工确认令牌]
     CONFIRM --> AUDIT[(审计日志)]
-    API --> SESSION[(会话与反馈)]
+    LOOP --> AUDIT
+    API --> SESSION[(会话与历史)]
     EVAL[40 条离线评测] --> RAG
 ```
 
-详细设计见 [docs/architecture.md](docs/architecture.md)。
+模型负责「提出调用哪个工具」，服务端负责「允不允许、参数对不对、要不要人工确认」。详细设计见 [docs/architecture.md](docs/architecture.md)。
 
 ## API
 
 | 接口 | 用途 | 关键行为 |
 |---|---|---|
 | `POST /documents` | 导入 TXT、Markdown、PDF | 限制大小、校验类型、按 SHA-256 去重 |
-| `POST /chat` | 会话和 Agent 工作流 | RAG、计算器、订单查询、工单意图、安全拦截 |
+| `POST /chat` | 会话和 Agent 工作流 | 模型选工具、服务端校验执行；注入前置拦截；检索、计算器、订单查询、工单意图；写操作只返回确认令牌 |
 | `GET /sessions/{id}` | 查看会话 | 通过 `X-User-Id` 做所有权校验 |
 | `POST /feedback` | 回答反馈 | 保存评分和备注 |
 | `POST /tickets` | 创建模拟工单 | 必须提供十分钟内有效且未使用的确认令牌 |
@@ -84,13 +86,14 @@ flowchart LR
 - `course/`：8 周日程、验收与复盘问题
 - `INTERVIEW_README.md`：按章节维护的面试题、标准答案与项目对应情况
 - `src/support_agent/`：应用代码
+- `src/support_agent/services/agent_loop.py`：手写「模型 → 工具 → 结果 → 模型」循环，含工具白名单、参数校验、轮数上限与写操作拦截（已接入 `POST /chat`）
+- `src/support_agent/services/local_model.py`：无 API Key 时使用的本地规则模型，与远程客户端实现同一个 `chat_with_tools` 接口
 - `sample_data/`：可导入的演示知识库
 - `evals/dataset.jsonl`：40 条固定评测样本
-- `tests/`：安全、RAG、API 和工作流测试
+- `tests/`：安全、RAG、Agent Loop、API 和工作流测试
 - `docs/`：架构、简历、面试和求职追踪材料
 - `examples/manual_agent.py`：不依赖 Agent 框架的工具调用边界示例
 - `examples/agent_loop_demo.py`：手写 Agent Loop 演示（脚本化假模型，无需 API Key）
-- `src/support_agent/services/agent_loop.py`：手写「模型 → 工具 → 结果 → 模型」循环，含工具白名单与参数校验（尚未接入 `POST /chat`）
 
 最新资源选择和框架比较见 [course/resources_2026.md](course/resources_2026.md)，第一次学习直接从 [course/tomorrow_start.md](course/tomorrow_start.md) 开始。
 

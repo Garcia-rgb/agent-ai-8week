@@ -1,7 +1,7 @@
 # 学习记录｜阶段 1：Python、FastAPI 与 Agent 基础流程
 
 > 整理日期：2026-09-15
-> 当前进度：第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 5 已完成，并完成附加节《SmartPV 知识库导入与检索隔离》，Day 5 手写 Agent Loop 已落地代码与测试。详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`，面试题见 `INTERVIEW_README.md`。
+> 当前进度：第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 6 已完成，并完成附加节《SmartPV 知识库导入与检索隔离》。Day 5 手写 Agent Loop，Day 6 把循环接进 `POST /chat`，主路径已由「Python 规则选工具」换成「模型选工具、服务端校验执行」。详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`，面试题见 `INTERVIEW_README.md`。
 
 ## 1. 当前环境
 
@@ -12,7 +12,7 @@
 - IDE：PyCharm
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
 - 本地模式：SQLite，不需要模型 API、PostgreSQL、Redis 或 Docker
-- 基线：46 个测试通过，Ruff 检查通过（Day 4 结束时为 28，加入知识库导入测试后为 34，加入 Agent Loop 测试后为 46）
+- 基线：70 个测试通过，Ruff 检查通过（Day 4 结束时为 28，加入知识库导入测试后为 34，加入 Agent Loop 测试后为 46，接入 `POST /chat` 后为 70）
 
 当前 PowerShell 无法自动加载 Conda 初始化脚本。只要 PyCharm 已选择上面的解释器，就可以直接使用：
 
@@ -235,7 +235,7 @@ JSON 请求体 → POST /chat
 
 即使使用 LLM，也不能直接相信任模型。工具白名单、权限检查、异常处理和人工确认仍必须由服务端负责。
 
-> 进度更新（2026-09-15）：上面那套「模型选工具 → 服务端校验执行 → 结果回传模型」的流程已经在 `services/agent_loop.py` 里真正写出来了，见本文件 Day 5 一节。但要注意：**它目前还是独立可测模块，`POST /chat` 走的仍然是本节的规则路由**，接入接口安排在 Day 6。所以现在准确的说法是「Agent Loop 已实现，但还没成为线上主路径」。
+> 进度更新（2026-09-15）：上面那套「模型选工具 → 服务端校验执行 → 结果回传模型」的流程已经在 `services/agent_loop.py` 里真正写出来了（见 Day 5 一节），并在当天接进了 `POST /chat`（见 Day 6 一节）。所以现在准确的说法是：**`/chat` 的主路径已经是 Agent Loop，本节描述的规则路由降级为「本地规则模型」的判据**——没有配置远程模型时，由它把意图翻译成同样的工具申请，链路和校验完全一致。本节讲的安全边界（白名单、权限、确认令牌）没有变，只是执行它们的位置从 `respond()` 的 if 分支挪进了循环。
 
 ## 8. 计算器为什么能处理不同数字
 
@@ -364,7 +364,7 @@ rollback → 发生错误时撤销未提交修改
 
 面试表达按“业务问题 → 架构 → RAG → 工具与安全 → 测试评测 → 限制和下一步”组织。
 
-当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、真实分卷知识库导入、语料隔离与拒答阈值、混合检索、规则路由、安全工具、手写 Agent Loop 与 Tool Calling 适配层、LLM 有限重试、46 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称 Agent Loop 已经接入 `POST /chat`、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
+当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、真实分卷知识库导入、语料隔离与拒答阈值、混合检索、手写 Agent Loop 与 Tool Calling 适配层、模型选工具的主路径（`POST /chat` 已接入）、无 API Key 可跑的本地规则模型、写操作人工确认、会话历史回填与工具轨迹审计、LLM 有限重试、70 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
 
 ## 17. 当前准确进度
 
@@ -603,8 +603,98 @@ messages = [system, user]
 - 尚未独立完成的部分：本节的代码由 AI 生成，用户尚未闭卷重写；Day 7 会安排关闭 AI 重写 `safe_calculate` 的核心递归逻辑。
 - 尚未实现的部分：会话历史持久化、更细的参数类型校验、未知工具的单独指标、模型频繁申请工具的成本告警。
 
+### Day 6：把 Agent Loop 接进 POST /chat（2026-09-15）
+
+**这一节要解决的问题**
+
+Day 5 结束时，Agent Loop 是个能跑、能测、但没人用的模块：`POST /chat` 仍然走 `graph.py` 的规则路由，真实链路依旧是「Python 用关键词判断意图，再决定调哪个工具」。这一节把它接到主路径上。
+
+改完之后，`/chat` 里各环节的归属：
+
+| 环节 | Day 5 之前 | Day 6 |
+|---|---|---|
+| 判断用户想干什么 | `graph.py` 关键词规则 | 模型（远程或本地） |
+| 决定调哪个工具 | `respond()` 里的 if 分支 | 模型提出申请，服务端白名单放行 |
+| 回答业务问题 | `respond()` 里固定先检索再拼提示词 | 模型自己决定何时调 `search_knowledge_base` |
+| 提示词注入拦截 | 规则路由的 `blocked` 分支 | 位置不变，仍在进循环之前 |
+| 创建工单 | 规则命中 `ticket` 分支 | 模型申请 `create_ticket`，服务端拦下并返回确认令牌 |
+
+**决定一：「模型」是一个接口，不是某家厂商**
+
+Agent Loop 只依赖一个 `ChatModel` 协议——能收「消息 + 工具清单」、返回一个 `AssistantTurn` 的东西。既然如此，「模型」就不必非得是远程 API。新增的 `RuleBasedLocalModel` 用规则实现了同一个方法：
+
+| | 远程模型（`OpenAICompatibleClient`） | 本地规则模型（`RuleBasedLocalModel`） |
+|---|---|---|
+| 谁决定调哪个工具 | 模型依据提示词和工具说明自己判断 | 复用 `graph.py` 的规则分类，把意图映射成工具申请 |
+| 没配 API Key 时 | 不可用 | 正常工作 |
+| 在测试里 | 需要 mock | 直接跑真实链路 |
+
+这件事的价值不只是「省一个 API Key」：**它让测试能对整条链路做端到端断言，而不是对一堆 mock 做断言**。项目里原有的 4 个 `/chat` 接口测试没有改一行断言就继续通过——因为对外契约和用户可见行为都没变，换掉的只是内部由谁来做决定。
+
+代价也要说清楚：本地模型不做任何语言理解，只是把规则路由的输出翻译成工具申请；它也没有能力在同一轮里既申请工具又给出结论，所以固定是两轮（申请 → 收敛）。
+
+**决定二：规则没有消失，只是换了位置**
+
+`graph.py` 从「主路径」变成了「本地模型的大脑」。但有一类规则**必须留在主路径上，不能交给模型**：
+
+- 提示词注入检测留在 `SupportAgent.respond()` 里，在进循环之前执行。理由很直接：**安全判断不能交给一个可能被说服的东西**。测试 `test_prompt_injection_is_blocked_before_the_loop` 断言这种情况下模型一次都没被调用。
+
+**决定三：知识库检索变成一个工具**
+
+原来「知识问答」是 `respond()` 里的一段 if 分支：先检索，再把片段拼进提示词，再调模型。现在它是白名单里的普通工具 `search_knowledge_base`，由模型自己决定什么时候检索、用什么 query。
+
+为了让它挂进同一个循环，工具执行约定放宽了一格：
+
+- `ToolSpec.handler` 允许是同步函数，也允许是协程；
+- `execute_tool_call()` 变成 `async`，用 `inspect.isawaitable()` 判断返回值要不要 await；
+- 于是「必须访问数据库的检索」和「纯计算的 calculator」在循环里没有任何区别。
+
+**检索为空时服务端必须兜底。** 模型完全可能嘴上说「我查过了，退款是七个工作日」而实际上工具返回了空。所以 `respond()` 里保留了硬判断：本轮调用过 `search_knowledge_base` 但一条命中都没有，就直接覆盖成拒答话术。测试 `test_empty_retrieval_overrides_the_model_answer` 用一个会编造答案的假模型验证了这条覆盖确实生效。
+
+**决定四：待确认的写操作是一个独立的结束状态**
+
+Day 5 里写操作被拒绝后会返回一段错误文本给模型，模型再补一句「这个需要你确认」——能走通，但很别扭：**「需要人工确认」是服务端的状态，不该由模型来复述**。
+
+Day 6 给 `ToolOutcome` 和 `ToolCallRecord` 都加上 `requires_confirmation`。循环一旦发现这种调用，就在本轮其余调用执行完之后立刻收场，`stopped_reason="needs_confirmation"`，由 `SupportAgent` 换成一张真正的确认令牌。用户看到的 `pending_action` 和原来完全一样，但它的来源从「模型的措辞」变成了「服务端的确切状态」。
+
+顺带调整了一处判定顺序：**先校验参数，再判断写操作**。参数本身就不合法的写操作不该生成确认请求——不能让用户去确认一个连参数都错的请求。
+
+**会话历史**
+
+`run_agent_loop()` 新增 `history` 参数，历史消息插在 system 之后、本轮用户消息之前。读取时机很关键：**必须在写入本轮用户消息之前读**，否则本轮问题会在上下文里出现两次。
+
+`Message` 表只保存对用户可见的对话；工具轨迹属于运维信息，写进 `AuditLog`（`action="agent_loop_tool_calls"`），记录轮数、停止原因和每次调用的名字与成败。这样排查「某次回答为什么不对」时，能直接看到当时到底调了什么工具。
+
+**代码落点**
+
+- `src/support_agent/services/agent_loop.py`（扩展）
+  - `ToolSpec.handler` 支持协程；`execute_tool_call()` 改异步，用 `inspect.isawaitable()` 兼容两种工具。
+  - `ToolOutcome` / `ToolCallRecord` 增加 `parsed` 与 `requires_confirmation`。
+  - 新增结束状态 `needs_confirmation`；`run_agent_loop()` 支持 `history`。
+  - 新增 `build_support_registry(searcher)`：在核心工具之上补上需要请求上下文的 `search_knowledge_base` 与 `create_ticket`。
+- `src/support_agent/services/local_model.py`（新增）：`RuleBasedLocalModel`，实现与远程客户端相同的 `chat_with_tools`。
+- `src/support_agent/services/agent.py`（重写 `respond`）：读历史 → 前置注入拦截 → 组装注册表 → 跑循环 → 提取引用与确认令牌 → 空检索兜底 → 写审计日志。
+- `src/support_agent/config.py`：新增 `agent_max_rounds`（默认 5）与 `chat_history_limit`（默认 10）。
+- `tests/test_local_model.py`（新增 9 个）、`tests/test_agent_integration.py`（新增 12 个）、`tests/test_agent_loop.py`（新增 3 个）。
+
+**测试与基线**
+
+新增 24 个测试，全量由 `46 passed` 更新为 `70 passed`，Ruff 检查通过。
+
+- 本地模型的意图映射：订单 → `query_order`、算式 → `calculator`、业务问题 → `search_knowledge_base`、投诉 → `create_ticket`（保留订单号）、注入 → 不申请任何工具、目标工具不在白名单 → 如实告知。
+- 端到端：算式和订单经工具完成、工具轨迹落审计日志、第二轮上下文里能看到第一轮对话、空检索覆盖模型答案、知识问答的引用来自工具返回值、写操作仍走确认令牌、注入在循环前被拦下、远程模型确实经 `chat_with_tools` 调用且拿到 4 个工具、模型故障降级、会话不存在与越权访问。
+- 循环层：写操作提前收敛、非法参数的写操作不生成确认、异步 handler 会被 await、历史消息位置正确。
+
+**掌握程度**
+
+- 本节是在用户确认「继续做这个项目」后由 AI 实现的，用户尚未闭卷重写其中任何一段。
+- 用户需要能回答的是：为什么本地规则模型值得存在（提示：测试和离线演示，不是省钱）；安全规则为什么不能交给模型；检索为空时为什么必须由服务端覆盖答案。
+- 尚未实现的部分：工具参数的枚举与嵌套对象校验、未知工具的独立指标、模型频繁申请工具的成本告警、跨轮的轮数预算、工具结果的注入过滤。
+
 ## 下一阶段
 
-进入第 3 周 Day 6：给 Agent Loop 加上会话记录、参数校验收口和未知工具处理。完成本节后，将两道面试题和标准答案追加到 `INTERVIEW_README.md`，并再次更新阶段进度。
+进入第 3 周 Day 7：关闭 AI 重写核心逻辑（`safe_calculate` 的递归下降解析、`parse_arguments` 的校验），并为工具层的异常路径补上评测样本。完成本节后，将两道面试题和标准答案追加到 `INTERVIEW_README.md`，并再次更新阶段进度。
+
+跨主机继续学习时，优先阅读仓库根目录的 `AI_AGENT_8W_HANDOFF.md`。
 
 跨主机继续学习时，优先阅读仓库根目录的 `AI_AGENT_8W_HANDOFF.md`。

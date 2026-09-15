@@ -1,7 +1,9 @@
-"""第 3 周 Day 5：Agent Loop 的离线测试。
+"""第 3 周 Day 5～Day 6：Agent Loop 的离线测试。
 
 全部测试都不连真实模型：用一个脚本化假模型按顺序吐回复，
 这样才能确定性地检查“第几轮调了什么工具、服务端有没有真的执行”。
+Day 6 增补的四项覆盖：写操作提前收敛、非法参数的写操作不生成确认请求、
+异步工具 handler 会被 await、历史消息插在本轮问题之前。
 """
 
 import copy
@@ -151,7 +153,7 @@ async def test_tool_level_error_is_returned_instead_of_raised() -> None:
 async def test_arguments_cannot_escape_the_calculator_sandbox() -> None:
     registry = build_tool_registry()
 
-    outcome = execute_tool_call(
+    outcome = await execute_tool_call(
         "calculator", '{"expression": "__import__(\\"os\\").getcwd()"}', registry
     )
 
@@ -183,6 +185,82 @@ async def test_write_tool_is_never_executed_automatically() -> None:
     assert invoked == []
     assert result.tool_calls[0].ok is False
     assert "需要人工确认" in result.tool_calls[0].output
+    # 待确认的写操作是一个独立的结束状态，不能让模型再补一句话来掩盖它。
+    assert result.stopped_reason == "needs_confirmation"
+    assert result.tool_calls[0].requires_confirmation is True
+    assert result.tool_calls[0].parsed == {"reason": "催发货"}
+    # 已经拿到确认请求就收场，不该再多调一轮模型。
+    assert len(model.calls) == 1
+
+
+async def test_write_tool_with_invalid_arguments_is_rejected_before_confirmation() -> None:
+    registry = dict(build_tool_registry())
+    registry["create_ticket"] = ToolSpec(
+        name="create_ticket",
+        description="创建工单",
+        parameters={
+            "type": "object",
+            "properties": {"reason": {"type": "string"}},
+            "required": ["reason"],
+            "additionalProperties": False,
+        },
+        handler=lambda arguments: {"created": True},
+        writes=True,
+    )
+    model = ScriptedModel(
+        tool_turn("create_ticket", '{"reason": 42}'),
+        text_turn("请用文字描述一下问题。"),
+    )
+
+    result = await run_agent_loop(model, "帮我投诉", registry=registry)
+
+    # 不能让用户去确认一个参数本身就不合法的操作。
+    assert result.tool_calls[0].requires_confirmation is False
+    assert "必须是字符串" in result.tool_calls[0].output
+    assert result.stopped_reason == "final_answer"
+
+
+async def test_async_tool_handler_is_awaited() -> None:
+    async def fetch(arguments: dict[str, Any]) -> dict[str, Any]:
+        return {"echo": arguments["query"]}
+
+    registry = dict(build_tool_registry())
+    registry["search"] = ToolSpec(
+        name="search",
+        description="异步检索",
+        parameters={
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        handler=fetch,
+    )
+    model = ScriptedModel(tool_turn("search", '{"query": "退款"}'), text_turn("找到了。"))
+
+    result = await run_agent_loop(model, "退款怎么走", registry=registry)
+
+    assert result.tool_calls[0].ok is True
+    assert json.loads(result.tool_calls[0].output) == {"echo": "退款"}
+
+
+async def test_history_is_put_before_the_current_message() -> None:
+    model = ScriptedModel(text_turn("好的"))
+    history = [
+        {"role": "user", "content": "我的订单号是 A1001"},
+        {"role": "assistant", "content": "已记录"},
+    ]
+
+    await run_agent_loop(model, "那什么时候发货", history=history)
+
+    messages = model.calls[0][0]
+    assert [item["role"] for item in messages] == [
+        "system",
+        "user",
+        "assistant",
+        "user",
+    ]
+    assert messages[-1]["content"] == "那什么时候发货"
 
 
 async def test_loop_stops_at_max_rounds_without_tools() -> None:
