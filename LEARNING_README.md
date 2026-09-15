@@ -1,7 +1,7 @@
 # 学习记录｜阶段 1：Python、FastAPI 与 Agent 基础流程
 
 > 整理日期：2026-09-15
-> 当前进度：第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 4 已完成，并完成附加节《SmartPV 知识库导入与检索隔离》，下一步进入 Day 5 手写 Agent Loop。详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`，面试题见 `INTERVIEW_README.md`。
+> 当前进度：第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 5 已完成，并完成附加节《SmartPV 知识库导入与检索隔离》，Day 5 手写 Agent Loop 已落地代码与测试。详细跨主机进度见 `AI_AGENT_8W_HANDOFF.md`，面试题见 `INTERVIEW_README.md`。
 
 ## 1. 当前环境
 
@@ -12,7 +12,7 @@
 - IDE：PyCharm
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
 - 本地模式：SQLite，不需要模型 API、PostgreSQL、Redis 或 Docker
-- 基线：34 个测试通过，Ruff 检查通过（Day 4 结束时为 28，加入知识库导入测试后为 34）
+- 基线：46 个测试通过，Ruff 检查通过（Day 4 结束时为 28，加入知识库导入测试后为 34，加入 Agent Loop 测试后为 46）
 
 当前 PowerShell 无法自动加载 Conda 初始化脚本。只要 PyCharm 已选择上面的解释器，就可以直接使用：
 
@@ -235,6 +235,8 @@ JSON 请求体 → POST /chat
 
 即使使用 LLM，也不能直接相信任模型。工具白名单、权限检查、异常处理和人工确认仍必须由服务端负责。
 
+> 进度更新（2026-09-15）：上面那套「模型选工具 → 服务端校验执行 → 结果回传模型」的流程已经在 `services/agent_loop.py` 里真正写出来了，见本文件 Day 5 一节。但要注意：**它目前还是独立可测模块，`POST /chat` 走的仍然是本节的规则路由**，接入接口安排在 Day 6。所以现在准确的说法是「Agent Loop 已实现，但还没成为线上主路径」。
+
 ## 8. 计算器为什么能处理不同数字
 
 计算器使用 Python AST 解析表达式，而不是保存固定答案。
@@ -362,7 +364,7 @@ rollback → 发生错误时撤销未提交修改
 
 面试表达按“业务问题 → 架构 → RAG → 工具与安全 → 测试评测 → 限制和下一步”组织。
 
-当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、真实分卷知识库导入、语料隔离与拒答阈值、混合检索、规则路由、安全工具、LLM 有限重试、34 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称真实 LLM Tool Calling、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
+当前可以真实声称 FastAPI、SQLite 本地模式、PostgreSQL/pgvector Compose 模式、真实分卷知识库导入、语料隔离与拒答阈值、混合检索、规则路由、安全工具、手写 Agent Loop 与 Tool Calling 适配层、LLM 有限重试、46 项测试、40 条评测样本、Docker 和 CI 配置已经存在。不能声称 Agent Loop 已经接入 `POST /chat`、高质量语义 Embedding、Redis 缓存/限流、完整 Trace、云端部署和最终回答评测已经完成。
 
 ## 17. 当前准确进度
 
@@ -487,8 +489,122 @@ rollback → 发生错误时撤销未提交修改
 - 本节属于概念讲解 + 引导下实操：用户能够说明语料隔离和拒答阈值各自解决什么问题、为什么两者不能只留一个。
 - 尚未独立实现的部分：阈值调参流程、按用户或租户动态切换 `corpus_id`、受限章节的独立授权访问通道。
 
+### Day 5：手写「模型 → 工具 → 结果 → 模型」的 Agent Loop（2026-09-15）
+
+**本节要回答的问题**
+
+1. 模型说「我要调用 `calculator`」，这句话到底是命令还是申请？
+2. 为什么循环必须有最大轮数？轮数用尽之后应该怎么办？
+3. 工具执行失败时，是抛异常结束，还是把错误交回模型？
+
+**Day 5 之前项目里没有 Agent Loop**
+
+- `services/agent.py` 的路由由 `graph.py` 的固定规则决定：命中「计算」关键字走计算器，出现 `A1001` 这类订单号走订单查询。
+- 也就是说，**是 Python 在选工具，不是模型在选工具**。这能跑通，但它不是 Tool Calling。
+- 真正的 Tool Calling 顺序是反过来的：模型看到工具清单和用户问题，自己决定要不要调、调哪个、传什么参数。
+
+**关键区分一：工具说明书 ≠ 工具白名单**
+
+| | 位置 | 作用 | 谁看 |
+|---|---|---|---|
+| 工具说明书 | 随请求发给模型的 `tools` 字段 | 让模型知道有哪些工具、参数长什么样 | 模型 |
+| 工具白名单 | 服务端进程内的 `dict[str, ToolSpec]` | 真正决定哪个函数可以被执行 | 服务端 |
+
+- 说明书是「建议」，白名单是「权限」。模型可以编出一个不存在的工具名，服务端必须拒绝。
+- 落到代码里：`ToolSpec.as_schema()` 只输出 `name` / `description` / `parameters`，**`handler` 永远不会出现在发给模型的 JSON 里**。
+- 测试 `test_registry_is_the_only_source_of_tool_schemas` 就是在守这条线：如果哪天有人图省事把 `handler` 塞进 schema，这个测试会红。
+
+**关键区分二：模型的参数是不可信输入**
+
+模型返回的 `arguments` 是一个 JSON 字符串，它可能：不是合法 JSON、是 JSON 数组而不是对象、缺必填字段、类型不对、或者塞了没定义的额外字段。
+
+所以 `parse_arguments()` 设了四道关：
+
+```text
+1. json.loads 能解析        → 否则「工具参数不是合法 JSON」
+2. 结果必须是 JSON 对象      → 否则「工具参数必须是 JSON 对象」
+3. 不能有未定义字段          → 否则「出现未定义参数」
+4. 必填字段齐全 + 类型正确    → 否则「缺少必填参数」/「参数 x 必须是字符串」
+```
+
+第 3 条值得单独说：多出来的字段要**拒绝**，不能静默忽略。静默忽略会让 `{"order_id": "A1001", "admin": true}` 这种越权参数悄悄通过，看起来没事，但一旦以后 handler 改成读取整个参数字典，漏洞就出现了。
+
+即使参数全部合法，工具内部还有第二层防线：`calculator` 走的是白名单 AST（`safe_calculate`），表达式里出现函数调用、属性访问就直接报错。测试里用 `__import__("os").getcwd()` 验证过这条路走不通。
+
+**循环本身只有四步**
+
+```text
+messages = [system, user]
+循环最多 5 轮：
+  1. 把 messages + 工具说明书交给模型 → 拿回 AssistantTurn
+  2. 把这个回复写回 messages（role=assistant）
+  3. 如果它没申请工具 → 这就是最终答案，结束
+  4. 如果它申请了工具 → 服务端校验并执行 → 结果以 role=tool 写回 messages
+```
+
+第 2 步和第 4 步的顺序不能反：`role=tool` 的消息必须紧跟在它对应的 `assistant.tool_calls` 之后，并且带上 `tool_call_id`，否则接口会报消息顺序错误，模型也分不清哪个结果对应哪次调用。
+
+**为什么必须有最大轮数**
+
+- 模型可能陷入死循环：调用工具 → 结果不满意 → 换个参数再调 → 还是不满意……每一轮都是真金白银的 token 和延迟。
+- 也可能是工具持续报错，模型持续重试同一条路。
+- 更糟的情况是模型把「工具失败」理解成「我需要再试一次」，而没有上限的循环会把一次用户提问放大成几十次调用。
+- 所以 `MAX_ROUNDS = 5`。轮数用尽后的处理不是抛异常，而是**禁用工具再问一次**：`model.chat_with_tools(messages, None)`，此时请求里不带 `tools` 字段，模型只能用手上已有的信息作答。这样用户至少能拿到一个基于部分信息的回答，而不是一个 500 错误。
+
+**工具失败是「信息」，不是「崩溃」**
+
+`execute_tool_call()` 的返回值是 `ToolOutcome(ok, text)`，无论失败原因是什么都返回一段文本，绝不向上抛异常：
+
+```text
+未知工具        → 错误：工具 xxx 不在允许列表中
+写操作工具      → 错误：工具 xxx 是写操作，需要人工确认后才能执行
+参数不合法      → 错误：缺少必填参数：['order_id']
+工具业务失败    → 错误：未找到订单 A9999
+工具自身异常    → 错误：工具执行失败（KeyError）
+```
+
+这样做有三个后果：整轮对话不会因为一次工具失败而中断；模型能看到具体错误并自己纠正参数；`ToolCallRecord` 里留下了完整轨迹，事后可以回放和统计工具失败率。
+
+**写操作不自动执行**
+
+`ToolSpec` 有一个 `writes` 标记，为 `True` 时 `execute_tool_call()` 直接拒绝，不调用 handler。
+
+- 理由和项目原来「创建工单需要确认令牌」是同一个：模型的话只能当成申请，写操作必须有人点头。
+- 测试 `test_write_tool_is_never_executed_automatically` 用一个假工单工具验证了 handler 确实没被调用。
+- Day 6 会把这里的拒绝接到真正的确认令牌流程上。
+
+**代码落点**
+
+- `src/support_agent/services/llm.py`（改写）
+  - 抽出 `_chat()`：统一处理超时、有限重试、错误分类，`answer()` 和 `chat_with_tools()` 共用，不再重复一遍重试逻辑。
+  - 新增 `ToolCallRequest`（`id` / `name` / `arguments`）和 `AssistantTurn`（`content` + `tool_calls`）。
+  - `AssistantTurn.from_message()` 负责把模型响应解析成结构化对象，结构不对统一归为 `invalid_response` 且不重试。
+  - 新增 `chat_with_tools(messages, tools)`：只负责翻译，不执行任何工具、不判断工具名是否合法。
+- `src/support_agent/services/agent_loop.py`（新增）
+  - `ToolSpec`：工具定义，含 `as_schema()` 与 `writes`。
+  - `build_tool_registry()`：服务端白名单，含 `calculator` 与 `query_order`。
+  - `parse_arguments()` / `ToolArgumentError`：参数校验四道关。
+  - `execute_tool_call()` / `ToolOutcome`：永不抛异常的执行入口。
+  - `run_agent_loop()` / `LoopResult` / `ToolCallRecord`：最多 5 轮循环与执行轨迹。
+  - `ChatModel` 是一个 `Protocol`，所以循环只依赖「一个能收消息和工具清单、返回 `AssistantTurn` 的东西」，真实客户端和测试假模型都满足它。
+- `tests/test_agent_loop.py`（新增，12 个测试）
+- `examples/agent_loop_demo.py`（新增）：用脚本化假模型跑一次「计算器 + 订单查询」的两轮调用，打印每轮意图和执行轨迹，不需要任何 API Key。
+
+**测试与基线**
+
+新增 12 个测试，全部不连真实模型：直接作答单轮结束、工具结果正确回传（含 `role=tool` 与 `tool_call_id` 校验）、说明书只暴露三个字段、未知工具被拒且循环继续、参数不是合法 JSON、缺必填参数、含未定义参数、订单不存在、计算器沙箱不可绕过、写操作工具不自动执行、5 轮用尽后禁用工具收敛、模型故障降级。
+
+全量测试由 `34 passed` 更新为 `46 passed`，Ruff 检查通过。
+
+**掌握程度**
+
+- 本节为概念讲解 + 代码实现：Agent Loop 是本次实际写出来的，不是只读现有实现。
+- 用户需要能回答的是：为什么「模型说要调用工具」不等于「工具会被执行」；轮数上限失效后系统如何收场；工具报错为什么不能抛异常。
+- 尚未独立完成的部分：本节的代码由 AI 生成，用户尚未闭卷重写；Day 7 会安排关闭 AI 重写 `safe_calculate` 的核心递归逻辑。
+- 尚未实现的部分：会话历史持久化、更细的参数类型校验、未知工具的单独指标、模型频繁申请工具的成本告警。
+
 ## 下一阶段
 
-进入第 3 周 Day 5：手写“模型选择工具 → 服务端校验和执行 → 工具结果回传模型”的最多 5 轮 Agent Loop。完成本节后，将两道面试题和标准答案追加到 `INTERVIEW_README.md`，并再次更新阶段进度。
+进入第 3 周 Day 6：给 Agent Loop 加上会话记录、参数校验收口和未知工具处理。完成本节后，将两道面试题和标准答案追加到 `INTERVIEW_README.md`，并再次更新阶段进度。
 
 跨主机继续学习时，优先阅读仓库根目录的 `AI_AGENT_8W_HANDOFF.md`。

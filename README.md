@@ -89,6 +89,8 @@ flowchart LR
 - `tests/`：安全、RAG、API 和工作流测试
 - `docs/`：架构、简历、面试和求职追踪材料
 - `examples/manual_agent.py`：不依赖 Agent 框架的工具调用边界示例
+- `examples/agent_loop_demo.py`：手写 Agent Loop 演示（脚本化假模型，无需 API Key）
+- `src/support_agent/services/agent_loop.py`：手写「模型 → 工具 → 结果 → 模型」循环，含工具白名单与参数校验（尚未接入 `POST /chat`）
 
 最新资源选择和框架比较见 [course/resources_2026.md](course/resources_2026.md)，第一次学习直接从 [course/tomorrow_start.md](course/tomorrow_start.md) 开始。
 

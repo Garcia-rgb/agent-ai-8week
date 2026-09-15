@@ -46,7 +46,7 @@ conda run -n agent-ai-8week python -m pytest -q
 - Conda 环境：`agent-ai-8week`
 - Python：3.12
 - PyCharm 解释器：`C:\Users\14374\miniconda3\envs\agent-ai-8week\python.exe`
-- 当前全量基线：34 个测试通过，Ruff 检查通过。
+- 当前全量基线：46 个测试通过，Ruff 检查通过。
 - PowerShell 的配置脚本受执行策略限制，终端可能无法直接识别 `conda`。PyCharm 选对解释器后直接使用 `python` 即可；也可以使用 `conda run -n agent-ai-8week ...`。
 - 2026-09-09 Windows 企业代码完整性策略曾阻止 conda-forge 的 OpenSSL 3.6.4；已用本机缓存的 defaults OpenSSL 3.5.7 离线修复。当前主机暂不执行 `conda env update -f environment.yml --prune`，避免恢复被拦截的 DLL。
 - 2026-09-11 已重新安装并验证 Docker Desktop；Compose 可正常启动 API、PostgreSQL/pgvector 和 Redis，三个容器均通过健康检查。
@@ -116,6 +116,7 @@ Swagger：`http://127.0.0.1:8000/docs`
 - 当前 LangGraph 是规则驱动的一步工作流，不是持续自主循环的 Agent。
 - 真正 Tool Calling 的基本流程：模型提出工具和参数，服务端校验并执行，再把结果交回模型。
 - Agent Loop 必须限制轮数、工具白名单、权限和写操作确认。
+- 2026-09-15 已把上述流程真正写进 `services/agent_loop.py`：模型自主选择工具、服务端校验并执行、结果回传后继续循环，最多 5 轮。注意它目前是**独立可测模块**，`POST /chat` 仍在走 `graph.py` 的规则路由；接入接口安排在 Day 6。
 
 ### RAG
 
@@ -163,7 +164,7 @@ Swagger：`http://127.0.0.1:8000/docs`
 
 因此不能简单记录为“学到第 6 周”。更准确的说法是：
 
-> 项目全貌第一遍和压缩版第 1 周已完成；第 2 周已完成第一轮讲解、引导实操和引导式复习。第 3 周 Day 1～Day 4 已完成第一轮学习和代码实操，并额外完成「SmartPV 知识库导入与检索隔离」一节；下一步进入 Day 5 手写 Agent Loop。
+> 项目全貌第一遍和压缩版第 1 周已完成；第 2 周已完成第一轮讲解、引导实操和引导式复习。第 3 周 Day 1～Day 5 已完成第一轮学习和代码实操，并额外完成「SmartPV 知识库导入与检索隔离」一节；Day 5 的手写 Agent Loop 已落地代码与测试。下一步进入 Day 6。
 
 ## 7. 约定的后续顺序
 
@@ -207,14 +208,15 @@ DELETE /tasks/{id}
 - Day 4：已学习并实现 `401/429/503/超时/响应损坏` 的分类、有限重试、退避等待、错误映射和 Agent 降级；完成两道面试题并建立 `INTERVIEW_README.md`。
 - Day 4 代码状态：新增 `tests/test_llm_retry.py` 的 5 个 Mock 测试；全量基线更新为 `28 passed`，Ruff 通过。尚未实现结构化降级字段、模型故障指标、随机抖动和总时间预算。
 - 附加节（2026-09-15）SmartPV 知识库导入与检索隔离：新增 `services/knowledge_base.py` 与 `scripts/ingest_smartpv.py`，把本地 HCSA-SmartPV V2.0 分卷按章节导入 PostgreSQL/pgvector，章节元数据带 `corpus_id=smartpv_v2`、`visibility=local_only` 和 `restricted` 标记；账号密码、密码重置章节默认排除，需显式 `--include-restricted` 才导入。`RAGService.search()` 新增 `corpus_id`、`include_restricted`、`min_score` 三个参数，实现语料隔离与拒答阈值；`config.py` 新增 `retrieval_corpus_id` 与 `retrieval_min_score`，Compose 注入 `smartpv_v2` 和 `0.4`；检索命中为空时 `agent.py` 直接拒答、不调用模型。新增 `tests/test_knowledge_base.py` 的 6 个测试，全量基线更新为 `34 passed`，Ruff 通过。
-- 下一步：进入 Day 5，手写“模型选择工具 → 服务端执行 → 工具结果回传模型”的最多 5 轮 Agent Loop。
+- Day 5（2026-09-15）：已手写「模型 → 工具 → 结果 → 模型」的最多 5 轮 Agent Loop。新增 `services/agent_loop.py`（`ToolSpec` 工具说明书、`build_tool_registry()` 服务端白名单、`parse_arguments()` 四道参数校验、`execute_tool_call()` 永不抛异常、`run_agent_loop()` 与 `LoopResult`/`ToolCallRecord`）；改写 `services/llm.py`，抽出共用的 `_chat()` 重试层并新增 `ToolCallRequest`、`AssistantTurn`、`chat_with_tools()`；新增 `tests/test_agent_loop.py` 的 12 个离线测试和 `examples/agent_loop_demo.py` 演示脚本。全量基线更新为 `46 passed`，Ruff 通过。关键区分：工具说明书（发给模型）≠ 工具白名单（服务端执行）；模型参数一律先校验再执行；轮数用尽后禁用工具强制收敛；写操作工具不自动执行。
+- 下一步：进入 Day 6，给 Agent Loop 加会话记录持久化、参数校验收口和未知工具处理，并把 Loop 接进 `POST /chat`。
 
 ## 8. 建议给下一台主机 Codex 的首条提示词
 
 用户可以在新对话中发送：
 
 ```text
-请先读取仓库根目录的 AI_AGENT_8W_HANDOFF.md、LEARNING_README.md、INTERVIEW_README.md、README.md 和 course/README.md，接着当前学习进度继续。第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 4 已完成，LLM 客户端已经实现错误分类和有限重试；此外已完成附加节「SmartPV 知识库导入与检索隔离」，检索层支持 corpus_id 语料隔离与最低相关度阈值，命中为空时直接拒答。项目基线为 34 passed。下一步进入 Day 5，手写最多 5 轮的 Agent Loop。请用中文、概念优先、少讲不必要语法。每节最后设置两道能够从当节内容推导的面试级问题；每节完成后，把题目、标准答案、30 秒表达和项目对应情况追加到 INTERVIEW_README.md，不记录用户原始回答。不要把讲过等同于已经掌握。
+请先读取仓库根目录的 AI_AGENT_8W_HANDOFF.md、LEARNING_README.md、INTERVIEW_README.md、README.md 和 course/README.md，接着当前学习进度继续。第 1、2 周已完成第一轮学习和引导式复习；第 3 周 Day 1～Day 5 已完成，LLM 客户端已经实现错误分类、有限重试和工具调用适配，`services/agent_loop.py` 已手写最多 5 轮的 Agent Loop（含工具白名单、参数校验、写操作拒绝和轮数用尽强制收敛）；此外已完成附加节「SmartPV 知识库导入与检索隔离」，检索层支持 corpus_id 语料隔离与最低相关度阈值，命中为空时直接拒答。项目基线为 46 passed。下一步进入 Day 6：给 Agent Loop 加会话记录、参数校验收口和未知工具处理，并接进 `POST /chat`。请用中文、概念优先、少讲不必要语法。每节最后设置两道能够从当节内容推导的面试级问题；每节完成后，把题目、标准答案、30 秒表达和项目对应情况追加到 INTERVIEW_README.md，不记录用户原始回答。不要把讲过等同于已经掌握。
 ```
 
 ## 9. 新主机开始前的核对清单
@@ -222,6 +224,6 @@ DELETE /tasks/{id}
 1. `git pull` 后确认存在本文件、`LEARNING_README.md` 和 `INTERVIEW_README.md`。
 2. 创建或同步 Conda 环境，不要硬编码当前主机的解释器路径。
 3. 从 `.env.example` 创建 `.env`；默认先不要填写真实模型密钥。
-4. 运行种子脚本、34 个测试和 Ruff。
+4. 运行种子脚本、46 个测试和 Ruff。
 5. 启动服务并打开 Swagger。
 6. 先确认用户希望继续“全貌讲解”，不要擅自重头重复 Python 基础。
