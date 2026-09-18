@@ -2,7 +2,7 @@
 
 ## 设计目标
 
-项目首先保证可解释、可测试和安全边界清晰，其次才是框架数量。默认本地模式用于学习和 CI，Docker 模式用于展示 PostgreSQL 与 Redis 技术栈（pgvector 只做了列类型映射，未接 ANN 索引，理由见「向量后端」一节）。
+项目首先保证可解释、可测试和安全边界清晰，其次才是框架数量。默认本地模式用于开发与 CI，Docker 模式用于启用 PostgreSQL 与 Redis（pgvector 只做了列类型映射，未接 ANN 索引，理由见「向量后端」一节）。
 
 相关文档：[系统架构图](diagrams/architecture.svg)｜[切块参数对照实验](chunking_experiment.md)｜[MCP 说明](mcp.md)｜[状态图](state_graph.md)
 
@@ -122,7 +122,7 @@
 ## 工具容错
 
 工具调用是整条链路里最不受控的一环：它可能查库、可能调外部接口，也可能因为参数不对被反复重试。
-三件事在 `services/agent_loop.py` 里处理（第 5 周 Day 4）。
+三件事在 `services/agent_loop.py` 里处理。
 
 **每个工具带独立超时。** `ToolSpec.timeout_seconds` 默认 10 秒，需要查库的
 `search_knowledge_base` 放宽到 15 秒。超时后返回 `error_kind="timeout"`，把「已放弃等待」

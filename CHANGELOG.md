@@ -9,12 +9,37 @@
 - 次版本号：新增能力，旧调用方不用改；
 - 修订号：向后兼容的修复与文档修正。
 
-`1.0.0` 之前的版本号是按四个落地阶段回填的（仓库从第 1 周的学习骨架长到现在，早期没有打标签）。
+`1.0.0` 之前的版本号是按四个落地阶段回填的（仓库从最早的骨架长到现在，早期没有打标签）。
 保留分段是为了能回溯「哪一次改动带来了哪一项指标变化」——每个版本下的 `实测` 一节记的就是这件事。
+
+## [1.3.1] - 2026-09-18
+
+仓库内容整理，**没有任何代码行为变更**：`/chat` 的响应结构、接口路径、配置项与默认参数全部照旧。
+
+### 变更
+
+- **移除与产品无关的仓库内容**。此前仓库里混着 34 个文件不属于这个服务本身：一份按周排的学习路线、
+  一套按章组织的面试题、8 周计划交接文档、12 份周次日程、9 份分阶段练习、模拟面试问答集、
+  面试题库、简历模板、求职投递追踪表、技术栈手册、每周复盘与错误日志模板，以及依赖练习目录的
+  4 项测试。它们已从仓库移出并另行归档，不再随代码分发。
+- **统一文档口吻**：README、CONTRIBUTING、SECURITY 的定位表述改为描述这个服务本身做什么，
+  不再把它称作学习或求职用途的材料；OpenAPI 描述（Swagger 页面首段）同步改写。
+- **清掉源码与文档里的阶段编号**。约 20 处注释、docstring 与小节标题写着「第 N 周 Day X」这类
+  排期编号（`services/agent_loop.py`、`services/agent.py`、`mcp_server.py`、`docs/mcp.md`、
+  `docs/state_graph.md`、三个 `examples/` 脚本与两个测试模块等），改为直接说明该段代码解决什么问题。
+  编号对读者没有信息量，且与「哪一步做了什么」的 CHANGELOG 记录重复。
+- **`pyproject.toml` 的 `pythonpath` 注释**去掉对已移出目录的引用，保留设置本身：
+  这条约束与具体目录无关，`pytest` 控制台脚本与 `python -m pytest` 的导入路径仍需一致。
+
+### 实测
+
+- 206 passed、1 skipped（共 207 项收集；上一版 210/211，差额正是移出的 4 项测试）。
+- 覆盖率 88.84%，与上一版持平；Ruff 通过。
+- 全仓库相对链接复查：没有指向已移出文件的死链。
 
 ## [1.3.0] - 2026-09-18
 
-把「切块用 700/100」从拍的变成试过的，同时补齐作品集展示件。`/chat` 的响应结构、接口路径与默认参数都没有变化。
+把「切块用 700/100」从拍的变成试过的，同时补齐交付与展示件。`/chat` 的响应结构、接口路径与默认参数都没有变化。
 
 ### 新增
 
@@ -24,9 +49,7 @@
   每组参数用独立的一次性数据库，互不共享索引。脚本支持 `--configs` 指定多组、`--report` 只汇总。
 - **系统架构图**（`docs/diagrams/architecture.svg`）与 README 里的一次 `/chat` 请求时序图（mermaid）。
   架构图按入口 / 接入 / 决策 / 能力 / 存储 / 旁路六层排布，把两条前置判据、熔断降级、四道闸都画了出来。
-- **演示视频脚本**（`docs/demo_script.md`）：七段分镜、逐段旁白、录制前准备与录完自检。
-- **简历模板改为如实版**（`docs/resume_template.md`）：删除四处与仓库不符的声称，改为每条要点都注明证据位置，
-  并补上「面试会被追问的七个点」。
+- **演示脚本**（`docs/demo_script.md`）：七段分镜、逐段旁白、演示前准备与录完自检。
 - **表结构漂移自检**（`scripts/check_schema.py`）：逐表对比代码里的列定义与数据库里实际的列。
   `create_all` 只补建缺失的表、不改已存在表的列名，所以把某个列改名（如 `tickets.order_id` →
   `tickets.device_sn`）之后，SQLite 那边重建过库就没事，PostgreSQL 走命名卷则会一直停在旧结构，
@@ -64,11 +87,10 @@
 - **`.env.example` 缺 5 个配置项**：`RETRIEVAL_CORPUS_ID`、`CHUNK_SIZE`、`CHUNK_OVERLAP`、
   `EMBEDDING_BATCH_SIZE`、`EMBEDDING_MAX_LENGTH`。照着模板拷出来的 `.env` 看不出这些旋钮存在，
   而其中既决定检索范围也决定切块粒度。
-- **`pytest` 控制台脚本收集不到第 1、2 周的练习测试**（`pyproject.toml`）。三个练习测试要
-  `import exercises.*`，而 `exercises/` 是仓库里的普通目录、不是已安装的包。`python -m pytest`
-  会把当前目录放进 `sys.path` 所以能导入，`pytest` 控制台脚本不会 —— 于是本地怎么跑都是绿的，
-  CI 一跑就是 `ModuleNotFoundError: exercises` 加收集中断（`collected 207 items / 3 errors`，退出码 2）。
-  现在在 `[tool.pytest.ini_options]` 里显式声明 `pythonpath = ["."]`，两种调用方式结果一致（均为 211 项）。
+- **`pytest` 控制台脚本与 `python -m pytest` 的导入路径不一致**（`pyproject.toml`）。前者不把当前目录
+  放进 `sys.path`，后者会。仓库根目录下有不属于已安装包的模块时，本地怎么跑都是绿的，CI 一跑就是
+  `ModuleNotFoundError` 加收集中断（`collected 207 items / 3 errors`，退出码 2）。
+  现在在 `[tool.pytest.ini_options]` 里显式声明 `pythonpath = ["."]`，两种调用方式结果一致。
   这个缺口只有在 CI 真跑起来之后才会暴露：本地要么用 `python -m pytest`，要么根本不装控制台脚本。
 
 ### 实测
@@ -134,7 +156,7 @@
 
 ## [1.2.0] - 2026-09-17
 
-第 5 周的两项能力：把设备能力以 MCP 协议暴露出去，以及给工具调用补上容错。
+本版两项能力：把设备能力以 MCP 协议暴露出去，以及给工具调用补上容错。
 两项都向后兼容，`/chat` 的响应结构与接口路径没有变化。
 
 ### 新增
@@ -216,7 +238,7 @@
 
 ## [1.1.2] - 2026-09-16
 
-清掉第 1 周电商示例域留下的残迹，并修掉一个因评测集移出仓库而失效的脚本。
+清掉早期电商示例域留下的残迹，并修掉一个因评测集移出仓库而失效的脚本。
 `/chat` 的行为没有变化。
 
 ### 修复
@@ -231,8 +253,7 @@
   这条提示词只有 `scripts/check_llm.py` 的单轮问答自检在用（`/chat` 走 `agent_loop.SYSTEM_PROMPT`），
   所以对外行为不变，只是自检的回答口吻不再和业务域错位。
 - 清掉各处遗留的电商示例：`check_llm.py` 的自检资料与提问、`smoke.py` 的问答与建单话术、
-  `docs/resume_template.md` 的项目名、`INTERVIEW_README.md` 与 `LEARNING_README.md` 的举例、
-  `course/week07.md` 的演示步骤，以及四个测试文件里的「退款」夹具（一律换成光伏文本）。
+  以及四个测试文件里的「退款」夹具（一律换成光伏文本）。
 - 措辞同步：`llm.py::local_answer` 的兜底话术改说「转人工支持」，
   `local_model.py` 的 docstring 改称「技术支持口吻」。
 
@@ -435,8 +456,9 @@
 
 - 初始骨架：FastAPI + SQLAlchemy（SQLite 演示模式 / PostgreSQL + pgvector）、会话与消息、
   审计日志、文档导入（TXT / Markdown / PDF，按 SHA-256 去重）、知识库检索、LangGraph 规则分类、
-  Docker Compose、CI 工作流与 8 周学习日历。
+  Docker Compose 与 CI 工作流。
 
+[1.3.1]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.2.1...v1.3.0
 [1.2.1]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.1.3...v1.2.0

@@ -1,4 +1,4 @@
-"""第 3 周 Day 5 演示：不接真实模型，观察 Agent Loop 每一轮到底发生了什么。
+"""演示：不接真实模型，观察 Agent Loop 每一轮到底发生了什么。
 
 运行方式：python examples/agent_loop_demo.py
 

@@ -106,7 +106,7 @@ class OpenAICompatibleClient:
 
     async def answer(self, question: str, contexts: list[str]) -> str:
         """知识问答：把检索片段放进提示词，要求模型只依据片段作答。"""
-        # 未配置远程模型时使用本地回答，保证学习和测试不依赖 API 密钥。
+        # 未配置远程模型时使用本地回答，保证开发与测试不依赖 API 密钥。
         if not self.settings.llm_enabled:
             return self.local_answer(contexts)
         prompt = "\n\n".join(f"[资料{i + 1}] {text}" for i, text in enumerate(contexts))

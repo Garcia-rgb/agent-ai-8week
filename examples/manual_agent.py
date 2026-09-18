@@ -1,4 +1,4 @@
-"""第 3 周练习：不使用 Agent 框架，手写清晰的工具调用边界。
+"""不使用 Agent 框架，手写清晰的工具调用边界。
 
 运行方式：python examples/manual_agent.py
 """

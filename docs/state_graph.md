@@ -1,7 +1,7 @@
 # 路由状态图（`graph.py`）
 
-> 第 5 周 Day 2 产出：把 `src/support_agent/graph.py` 编译出来的图画清楚。
-> Day 3 的检查点与中断恢复实验见 `examples/graph_checkpoint_demo.py`。
+> 把 `src/support_agent/graph.py` 编译出来的图画清楚。
+> 检查点与中断恢复实验见 `examples/graph_checkpoint_demo.py`。
 
 ## 图长什么样
 
@@ -58,7 +58,7 @@ Edge 是流转规则：
 
 ## 检查点：从「跑完就没了」到「可以停下来」
 
-`build_route_graph(checkpointer=...)` 是 Day 3 加的开关，默认 `None`，此时图与加入检查点之前完全一致。
+`build_route_graph(checkpointer=...)` 是加入检查点时的开关，默认 `None`，此时图与加入检查点之前完全一致。
 
 传了检查点之后，行为有三处变化：
 

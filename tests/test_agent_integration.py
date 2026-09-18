@@ -1,4 +1,4 @@
-"""Day 6：Agent Loop 接入 /chat 之后的端到端测试。
+"""Agent Loop 接入 /chat 之后的端到端测试。
 
 这里刻意不 mock 模型：默认配置下没有 API Key，`SupportAgent` 会自动用本地规则模型，
 于是一整条真实链路（模型提出工具申请 → 白名单 → 参数校验 → 执行 → 结果回填 → 收敛）

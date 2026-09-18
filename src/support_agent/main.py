@@ -86,7 +86,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(
     title="光伏电站技术支持 Agent",
     version=__version__,
-    description="RAG、工具调用、人工确认、评测与审计的求职作品项目",
+    description="光伏电站技术支持 Agent：RAG、工具调用、人工确认、评测与审计",
     lifespan=lifespan,
 )
 app.middleware("http")(request_observability)

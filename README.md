@@ -1,15 +1,17 @@
 # 光伏电站技术支持 Agent
 
-[![version](https://img.shields.io/badge/version-1.3.0-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.3.1-blue)](CHANGELOG.md)
 [![python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-3776ab)](pyproject.toml)
-[![tests](https://img.shields.io/badge/tests-210%20passed%20%2F%201%20skipped-brightgreen)](tests)
+[![tests](https://img.shields.io/badge/tests-206%20passed%20%2F%201%20skipped-brightgreen)](tests)
 [![coverage](https://img.shields.io/badge/coverage-88.84%25-brightgreen)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 [![code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000)](https://github.com/astral-sh/ruff)
 
-当前版本 **1.3.0**，包名 `smartpv-support-agent`，命令行入口 `smartpv-agent`。版本变更与每一项指标的来源见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **1.3.1**，包名 `smartpv-support-agent`，命令行入口 `smartpv-agent`。版本变更与每一项指标的来源见 [CHANGELOG.md](CHANGELOG.md)。
 
-这是一个同时用于学习、作品集和面试讲解的仓库。项目覆盖 FastAPI、数据库、RAG、LangGraph、工具调用、人工确认、安全审计、离线评测、测试和 Docker。
+这是一个面向光伏电站技术支持场景的问答与办事服务：工程师把现场现象或问题丢进来，它去知识库里找依据、
+必要时查设备档案或算一段，涉及写操作（建工单）时先要人工确认。项目覆盖 FastAPI、数据库、RAG、LangGraph、
+工具调用、人工确认、安全审计、离线评测、测试和 Docker。
 
 默认模式不需要模型 API、PostgreSQL 或 Redis：SQLite 保存数据，本地规则模型驱动同一个 Agent Loop，展示检索结果。接入 OpenAI 兼容接口后，改由真实模型决定调用哪个工具并组织回答，链路和校验完全一致。
 
@@ -42,7 +44,8 @@ python -m build                  # 产物在 dist/，可直接 pip install 到�
 ## 快速开始（Windows PowerShell，Conda 路线）
 
 ```powershell
-cd D:\agent1\projects\agent-ai-8week
+git clone https://github.com/Garcia-rgb/agent-ai-8week.git
+cd agent-ai-8week
 conda env create -f environment.yml
 conda activate agent-ai-8week
 Copy-Item .env.example .env
@@ -110,7 +113,7 @@ smartpv-agent serve --host 0.0.0.0 --port 8000 [--reload]
 `doctor` 的输出长这样（下面是没配远程模型时的样子，`model` 那行是 WARN，其余全 OK）：
 
 ```text
-SmartPV Support Agent 1.3.0 | doctor
+SmartPV Support Agent 1.3.1 | doctor
 
 [OK  ] configuration  app_env=development
 [OK  ] database       sqlite+aiosqlite:///./support_agent.db | 20 documents / 212 chunks
@@ -469,8 +472,6 @@ git tag v1.0.0                       # 4. 打标签，与 CHANGELOG 的版本号
 - `SECURITY.md`：已实现的安全边界、部署前必改项、已知边界（含「没有真实认证」这条）
 - `docs/deployment.md`：部署到服务器、升级与回滚、上线检查清单
 - `LICENSE`：MIT
-- `course/`：8 周日程、验收与复盘问题
-- `INTERVIEW_README.md`：按章节维护的面试题、标准答案与项目对应情况
 - `src/support_agent/`：应用代码
 - `src/support_agent/cli.py`：命令行入口，`version` / `doctor` / `serve` 三个子命令
 - `src/support_agent/services/cache.py`：检索缓存、按用户限流的四层存储（进程内 / Redis / 熔断降级）
@@ -487,10 +488,7 @@ git tag v1.0.0                       # 4. 打标签，与 CHANGELOG 的版本号
 - `scripts/chunking_experiment.py`：切块参数对照实验，逐组重建索引并算命中率，结论见 [docs/chunking_experiment.md](docs/chunking_experiment.md)
 - `tests/`：安全、RAG、Agent Loop、API 和工作流测试
 - `docs/diagrams/architecture.svg`：系统架构图
-- `docs/demo_script.md`：3–5 分钟演示视频的分镜与旁白稿
-- `docs/tech_stack_guide.md`：技术栈教学手册（8 项技术栈分层讲解，含代码与变量对照、复习检查表）
-- `docs/mock_interview.md`：模拟面试问答集（42 题，按面试轮次组织，含追问预警与诚实边界一轮）
-- `docs/`：架构、切块实验、简历、面试和求职追踪材料
+- `docs/demo_script.md`：3–5 分钟演示的分镜与旁白稿
 - `examples/manual_agent.py`：不依赖 Agent 框架的工具调用边界示例
 - `examples/agent_loop_demo.py`：手写 Agent Loop 演示（脚本化假模型，无需 API Key）
 
@@ -507,14 +505,9 @@ git tag v1.0.0                       # 4. 打标签，与 CHANGELOG 的版本号
 表结构本身没变，不必重建库文件。分卷导入的版本号从 `index.json` 读，单份导入用
 `--document-version` 指定（默认从标题里抽，例如「第3册」）。
 
-最新资源选择和框架比较见 [course/resources_2026.md](course/resources_2026.md)，第一次学习直接从 [course/tomorrow_start.md](course/tomorrow_start.md) 开始。
+## 使用边界
 
-## 8 周总验收
+本服务用于内部技术支持场景，语料与评测集都不进仓库，随资料更新由调用方导入；导入方式见上面的两条通道。
 
-- 能在不看 AI 输出的情况下解释关键代码、数据库表和每条安全边界。
-- 能从零写出一个 FastAPI CRUD、SQL 查询和受控工具调用。
-- 能演示文档导入、知识问答、引用、设备查询、工单确认和令牌防重放。
-- 能展示离线评测集、失败样本和至少一次可量化优化。
-- 能用 Docker Compose 启动，并清楚说明 SQLite 演示模式与 PostgreSQL 模式的差异。
-
-本仓库是求职作品，不应直接处理真实客户数据或真实支付/退款操作。
+演示与测试环境使用本地示例数据与模拟工单，**不接真实客户数据，也不接真实支付或退款操作**。
+部署前需要落实的事项见 [SECURITY.md](SECURITY.md)，上线检查清单见 [docs/deployment.md](docs/deployment.md)。

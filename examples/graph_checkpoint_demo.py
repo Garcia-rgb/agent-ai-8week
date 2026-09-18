@@ -1,4 +1,4 @@
-"""第 5 周 Day 3 演示：给路由图加检查点，对比「无状态」与「可回放」。
+"""演示：给路由图加检查点，对比「无状态」与「可回放」。
 
 运行方式：python examples/graph_checkpoint_demo.py
 

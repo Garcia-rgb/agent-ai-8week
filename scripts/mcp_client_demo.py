@@ -1,4 +1,4 @@
-"""第 5 周 Day 5 演示：以 Client 身份连上本项目的 MCP Server。
+"""演示：以 Client 身份连上本项目的 MCP Server。
 
 运行方式：python scripts/mcp_client_demo.py
 
