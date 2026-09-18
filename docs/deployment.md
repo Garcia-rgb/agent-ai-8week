@@ -20,7 +20,7 @@
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install smartpv_support_agent-1.3.1-py3-none-any.whl
+pip install smartpv_support_agent-1.3.2-py3-none-any.whl
 ```
 
 装完先跑自检，把它当成部署门禁：
@@ -96,7 +96,7 @@ asyncpg.exceptions.UndefinedColumnError: column "device_sn" of relation "tickets
 python scripts/check_schema.py              # 逐表对比代码定义与库里实际列，有漂移退出 1
 
 # 容器内
-docker exec -i agent-ai-8week-api-1 python - < scripts/check_schema.py
+docker compose exec -T api python - < scripts/check_schema.py
 ```
 
 脚本会列出差异并给出候选的改名语句。该表为空时修起来最安全：
@@ -139,7 +139,7 @@ python scripts/ingest_smartpv.py --source "<资料目录>" --reset
 导入完成后**清一次缓存**：宿主机导入不会通知正在运行的服务，语料代次没变，300 秒 TTL 内仍会读到旧结果。
 
 ```powershell
-docker exec agent-ai-8week-redis-1 redis-cli FLUSHALL
+docker compose exec redis redis-cli FLUSHALL
 ```
 
 ## 反向代理

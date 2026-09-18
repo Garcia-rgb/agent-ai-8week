@@ -1,4 +1,4 @@
-name: agent-ai-8week
+name: smartpv-support-agent
 channels:
   - conda-forge
   - nodefaults

@@ -3,7 +3,7 @@ FROM python:3.12-slim
 LABEL org.opencontainers.image.title="SmartPV Support Agent" \
       org.opencontainers.image.description="Photovoltaic plant technical support agent: RAG, tool calling, human confirmation and offline evaluation" \
       org.opencontainers.image.licenses="MIT" \
-      org.opencontainers.image.source="https://github.com/Garcia-rgb/agent-ai-8week"
+      org.opencontainers.image.source="https://github.com/Garcia-rgb/smartpv-support-agent"
 
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app

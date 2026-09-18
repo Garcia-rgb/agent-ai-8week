@@ -9,7 +9,7 @@
 
 ```powershell
 # 路线一：Conda（本机一直在用的那条）
-conda env create -f environment.yml && conda activate agent-ai-8week
+conda env create -f environment.yml && conda activate smartpv-support-agent
 
 # 路线二：venv
 python -m venv .venv; .\.venv\Scripts\Activate.ps1; pip install -e ".[dev]"

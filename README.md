@@ -1,13 +1,13 @@
 # 光伏电站技术支持 Agent
 
-[![version](https://img.shields.io/badge/version-1.3.1-blue)](CHANGELOG.md)
+[![version](https://img.shields.io/badge/version-1.3.2-blue)](CHANGELOG.md)
 [![python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-3776ab)](pyproject.toml)
 [![tests](https://img.shields.io/badge/tests-206%20passed%20%2F%201%20skipped-brightgreen)](tests)
 [![coverage](https://img.shields.io/badge/coverage-88.84%25-brightgreen)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
 [![code style: ruff](https://img.shields.io/badge/code%20style-ruff-000000)](https://github.com/astral-sh/ruff)
 
-当前版本 **1.3.1**，包名 `smartpv-support-agent`，命令行入口 `smartpv-agent`。版本变更与每一项指标的来源见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本 **1.3.2**，包名 `smartpv-support-agent`，命令行入口 `smartpv-agent`。版本变更与每一项指标的来源见 [CHANGELOG.md](CHANGELOG.md)。
 
 这是一个面向光伏电站技术支持场景的问答与办事服务：工程师把现场现象或问题丢进来，它去知识库里找依据、
 必要时查设备档案或算一段，涉及写操作（建工单）时先要人工确认。项目覆盖 FastAPI、数据库、RAG、LangGraph、
@@ -44,10 +44,10 @@ python -m build                  # 产物在 dist/，可直接 pip install 到�
 ## 快速开始（Windows PowerShell，Conda 路线）
 
 ```powershell
-git clone https://github.com/Garcia-rgb/agent-ai-8week.git
-cd agent-ai-8week
+git clone https://github.com/Garcia-rgb/smartpv-support-agent.git
+cd smartpv-support-agent
 conda env create -f environment.yml
-conda activate agent-ai-8week
+conda activate smartpv-support-agent
 Copy-Item .env.example .env
 python scripts/ingest_smartpv.py --source "D:\资料汇总"
 uvicorn support_agent.main:app --reload
@@ -57,7 +57,7 @@ uvicorn support_agent.main:app --reload
 
 ```powershell
 conda env update -f environment.yml --prune
-conda activate agent-ai-8week
+conda activate smartpv-support-agent
 ```
 
 打开 <http://127.0.0.1:8000/docs> 使用 Swagger。运行测试：
@@ -94,7 +94,7 @@ python scripts/ingest_document.py --file "D:\资料汇总\拓展资料\第3册-�
 - **改列名后表结构不会自动跟上**。`create_all` 只补建缺失的表，不改已存在表的列名。SQLite 那边重建过库就没事，
   而 PG 走的是命名卷 `postgres_data`，会一直停在旧结构，直到某次写入才炸出 500（`column "device_sn" ... does not exist`）。
   查漂移用 `python scripts/check_schema.py`；容器内用
-  `docker exec -i agent-ai-8week-api-1 python - < scripts/check_schema.py`。有漂移时退出码为 1，可以串进部署前检查。
+  `docker compose exec -T api python - < scripts/check_schema.py`。有漂移时退出码为 1，可以串进部署前检查。
 - **Redis 没有数据卷**，`docker compose down` 之后缓存为空是预期行为——缓存本身就是可丢的，接口不依赖它，
   限流计数会从零开始。
 - **`Dockerfile` 里 `COPY static` 必须排在 `pip install` 之前**。`pyproject.toml` 用 hatch 的 `force-include`
@@ -113,7 +113,7 @@ smartpv-agent serve --host 0.0.0.0 --port 8000 [--reload]
 `doctor` 的输出长这样（下面是没配远程模型时的样子，`model` 那行是 WARN，其余全 OK）：
 
 ```text
-SmartPV Support Agent 1.3.1 | doctor
+SmartPV Support Agent 1.3.2 | doctor
 
 [OK  ] configuration  app_env=development
 [OK  ] database       sqlite+aiosqlite:///./support_agent.db | 20 documents / 212 chunks

@@ -8,7 +8,7 @@
 用法：
 
     python scripts/check_schema.py                  # 检查当前 DATABASE_URL
-    docker exec -i agent-ai-8week-api-1 python - < scripts/check_schema.py
+    docker compose exec -T api python - < scripts/check_schema.py
 
 有漂移时退出码为 1，可以直接串进 CI 或部署前检查。
 """

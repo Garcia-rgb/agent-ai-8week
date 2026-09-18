@@ -72,11 +72,11 @@ dev = [
 smartpv-agent = "support_agent.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/Garcia-rgb/agent-ai-8week"
-Repository = "https://github.com/Garcia-rgb/agent-ai-8week"
-Issues = "https://github.com/Garcia-rgb/agent-ai-8week/issues"
-Changelog = "https://github.com/Garcia-rgb/agent-ai-8week/blob/main/CHANGELOG.md"
-Documentation = "https://github.com/Garcia-rgb/agent-ai-8week/blob/main/docs/architecture.md"
+Homepage = "https://github.com/Garcia-rgb/smartpv-support-agent"
+Repository = "https://github.com/Garcia-rgb/smartpv-support-agent"
+Issues = "https://github.com/Garcia-rgb/smartpv-support-agent/issues"
+Changelog = "https://github.com/Garcia-rgb/smartpv-support-agent/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/Garcia-rgb/smartpv-support-agent/blob/main/docs/architecture.md"
 
 [tool.hatch.version]
 path = "src/support_agent/__init__.py"

@@ -42,5 +42,5 @@
 
 ## 上报问题
 
-在 GitHub 仓库开 issue：<https://github.com/Garcia-rgb/agent-ai-8week/issues>。
+在 GitHub 仓库开 issue：<https://github.com/Garcia-rgb/smartpv-support-agent/issues>。
 请不要在 issue 里贴出真实密钥、令牌或客户数据——贴日志前先把这两样改掉。

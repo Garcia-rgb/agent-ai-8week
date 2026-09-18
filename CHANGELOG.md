@@ -12,6 +12,35 @@
 `1.0.0` 之前的版本号是按四个落地阶段回填的（仓库从最早的骨架长到现在，早期没有打标签）。
 保留分段是为了能回溯「哪一次改动带来了哪一项指标变化」——每个版本下的 `实测` 一节记的就是这件事。
 
+## [1.3.2] - 2026-09-18
+
+仓库改名同步，**没有任何代码行为变更**：接口、配置项与默认参数照旧，`/chat` 的响应结构不变。
+
+GitHub 仓库由 `agent-ai-8week` 改名为 `smartpv-support-agent`。新地址 `https://github.com/Garcia-rgb/smartpv-support-agent`
+（旧地址仍会 301 跳转），本版把这个名字在仓库里的每一处引用都跟上。
+
+### 变更
+
+- **自指链接**：`CHANGELOG.md` 的 13 条 compare / release 链接、README 的 clone 地址、
+  `pyproject.toml` 的 Homepage / Repository / Issues / Changelog / Documentation、
+  `SECURITY.md` 的 issue 入口、`Dockerfile` 的 `org.opencontainers.image.source` 标签，全部改为新地址。
+  这些是唯一会跟着远端改名而失效的东西——旧地址只是靠跳转还能打开。
+- **环境名**：`environment.yml` 的 `name` 与 README / CONTRIBUTING 里的 `conda activate` 由
+  `agent-ai-8week` 改为 `smartpv-support-agent`；README 的 clone 后 `cd` 也改为新目录名
+  （`git clone` 默认按仓库名建目录）。
+- **容器名引用改为 compose 服务名**：README 与 `docs/deployment.md`、`scripts/check_schema.py`
+  里的 `docker exec -i agent-ai-8week-api-1 ...` 改为 `docker compose exec -T api ...`，
+  Redis 那处同理改为 `docker compose exec redis ...`。原先写死的容器名带 compose 项目名前缀，
+  而项目名默认取目录名——只在「目录恰好叫 `agent-ai-8week`」时成立，别人 clone 下来就已经不对了。
+  改用服务名后与项目名无关，这次改名和以后换目录都不会再让它失效。
+
+### 实测
+
+- 206 passed、1 skipped（共 207 项收集），与 1.3.1 持平；Ruff 通过。
+- 除本节对改名本身的说明外，仓库内 `agent-ai-8week` 的引用数：30 处 → 0 处。
+- `python -m build` 重新出包：`smartpv_support_agent-1.3.2-py3-none-any.whl`，
+  元数据的 `Project-URL` 五项均为新地址，`static/` 前端资源仍在包内。
+
 ## [1.3.1] - 2026-09-18
 
 仓库内容整理，**没有任何代码行为变更**：`/chat` 的响应结构、接口路径、配置项与默认参数全部照旧。
@@ -458,16 +487,17 @@
   审计日志、文档导入（TXT / Markdown / PDF，按 SHA-256 去重）、知识库检索、LangGraph 规则分类、
   Docker Compose 与 CI 工作流。
 
-[1.3.1]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.3.0...v1.3.1
-[1.3.0]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.2.1...v1.3.0
-[1.2.1]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.2.0...v1.2.1
-[1.2.0]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.1.3...v1.2.0
-[1.1.3]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.1.2...v1.1.3
-[1.1.2]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.1.1...v1.1.2
-[1.1.1]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.1.0...v1.1.1
-[1.1.0]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/Garcia-rgb/agent-ai-8week/releases/tag/v1.0.0
-[0.4.0]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/Garcia-rgb/agent-ai-8week/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/Garcia-rgb/agent-ai-8week/releases/tag/v0.1.0
+[1.3.2]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v1.3.1...v1.3.2
+[1.3.1]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v1.3.0...v1.3.1
+[1.3.0]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v1.2.1...v1.3.0
+[1.2.1]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v1.2.0...v1.2.1
+[1.2.0]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v1.1.3...v1.2.0
+[1.1.3]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v1.1.2...v1.1.3
+[1.1.2]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v1.1.1...v1.1.2
+[1.1.1]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v1.1.0...v1.1.1
+[1.1.0]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/Garcia-rgb/smartpv-support-agent/releases/tag/v1.0.0
+[0.4.0]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/Garcia-rgb/smartpv-support-agent/compare/v0.1.0...v0.2.0
+[0.1.0]: https://github.com/Garcia-rgb/smartpv-support-agent/releases/tag/v0.1.0
