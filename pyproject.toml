@@ -92,6 +92,10 @@ packages = ["src/support_agent"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# `python -m pytest` 会把当前目录放进 sys.path，`pytest` 控制台脚本不会。第 1、2 周的
+# 练习测试要 import exercises.*，只靠前者能过，于是本地绿、CI 红并中断收集。
+# 显式声明在这里，两种调用方式结果一致。
+pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["support_agent"]

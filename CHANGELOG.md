@@ -64,6 +64,12 @@
 - **`.env.example` 缺 5 个配置项**：`RETRIEVAL_CORPUS_ID`、`CHUNK_SIZE`、`CHUNK_OVERLAP`、
   `EMBEDDING_BATCH_SIZE`、`EMBEDDING_MAX_LENGTH`。照着模板拷出来的 `.env` 看不出这些旋钮存在，
   而其中既决定检索范围也决定切块粒度。
+- **`pytest` 控制台脚本收集不到第 1、2 周的练习测试**（`pyproject.toml`）。三个练习测试要
+  `import exercises.*`，而 `exercises/` 是仓库里的普通目录、不是已安装的包。`python -m pytest`
+  会把当前目录放进 `sys.path` 所以能导入，`pytest` 控制台脚本不会 —— 于是本地怎么跑都是绿的，
+  CI 一跑就是 `ModuleNotFoundError: exercises` 加收集中断（`collected 207 items / 3 errors`，退出码 2）。
+  现在在 `[tool.pytest.ini_options]` 里显式声明 `pythonpath = ["."]`，两种调用方式结果一致（均为 211 项）。
+  这个缺口只有在 CI 真跑起来之后才会暴露：本地要么用 `python -m pytest`，要么根本不装控制台脚本。
 
 ### 实测
 
@@ -80,6 +86,10 @@
   容器内 20 文档 / 212 片段与本地 SQLite 完全一致。
 - 210 passed、1 skipped（共 211 项收集，跳过的那项需要本地模型文件），Ruff 通过；
   覆盖率 83% → 88.84%（门限 80%）。新增的 12 项来自 `tests/test_cli.py`，补完后 `cli.py` 从 0% 到 78%。
+- 本版首次推送后 CI 真实结果：`lint`、`package`、`docker` 三个 job 通过（wheel 装进干净环境与
+  容器内两条路径都验到了 `/health` 与 `/`），`test` 矩阵因上面那条收集错误失败。
+  按 CI 的调用方式（`pytest` 控制台脚本）本地复跑修复后的结果：210 passed / 1 skipped、
+  覆盖率 88.84%，与 `python -m pytest` 一致。
 
 ## [1.2.1] - 2026-09-17
 
