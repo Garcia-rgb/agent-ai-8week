@@ -5,7 +5,12 @@ from pgvector.sqlalchemy import Vector
 from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
+from .config import get_settings
 from .db import Base
+
+# 向量列宽跟随当前后端（哈希 384 / ONNX 512）。SQLite 下这一列退化为 JSON，
+# 维度只对 pgvector 有意义；但两种情况下换后端都要重建表并重新导入语料。
+VECTOR_DIMENSION = get_settings().vector_dimension
 
 
 def new_id() -> str:
@@ -18,6 +23,7 @@ def utcnow() -> datetime:
 
 class Conversation(Base):
     """一次用户会话，对应数据库中的 conversations 表。"""
+
     __tablename__ = "conversations"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     user_id: Mapped[str] = mapped_column(String(64), index=True)
@@ -26,6 +32,7 @@ class Conversation(Base):
 
 class Message(Base):
     """会话中的单条消息，可保存 RAG 引用信息。"""
+
     __tablename__ = "messages"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     session_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), index=True)
@@ -46,6 +53,7 @@ class SourceDocument(Base):
 
 class DocumentChunk(Base):
     """文档切分后的可检索片段及其向量。"""
+
     __tablename__ = "document_chunks"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     document_id: Mapped[str] = mapped_column(ForeignKey("source_documents.id"), index=True)
@@ -54,14 +62,16 @@ class DocumentChunk(Base):
     content: Mapped[str] = mapped_column(Text)
     chunk_metadata: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     # PostgreSQL 使用 pgvector；本地 SQLite 演示模式改用 JSON 保存同一份向量。
-    embedding: Mapped[list[float]] = mapped_column(Vector(384).with_variant(JSON, "sqlite"))
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector(VECTOR_DIMENSION).with_variant(JSON, "sqlite")
+    )
 
 
 class Ticket(Base):
     __tablename__ = "tickets"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     session_id: Mapped[str] = mapped_column(ForeignKey("conversations.id"), index=True)
-    order_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    device_sn: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reason: Mapped[str] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(32), default="open")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
@@ -93,4 +103,28 @@ class AuditLog(Base):
     action: Mapped[str] = mapped_column(String(64), index=True)
     resource: Mapped[str] = mapped_column(String(128))
     detail: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ConsumedConfirmationToken(Base):
+    """已消费的确认令牌，用于判定重放。
+
+    单独建表而不是复用 ``audit_logs``，有两个原因：
+
+    ① 判定重放必须「写入即结论」。先查再写（select 之后 insert）在并发下会漏——
+    两个请求都能查到「没人用过」，于是同一张令牌建出两条工单。把 token_hash 做成
+    主键，重复写入直接撞唯一约束，检查与写入就压成了一次原子操作。
+    ② 审计日志是记录，让它可清理；这张表是安全判据，被清理掉就等于防重放失效。
+    两者生命周期不同，不该共用一行。
+
+    记录与工单在同一事务里提交：提交失败时两者一起回滚，用户拿原令牌重试即可，
+    不会出现「令牌已烧掉、工单却没建」。
+    """
+
+    __tablename__ = "consumed_confirmation_tokens"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(64))
+    ticket_id: Mapped[str | None] = mapped_column(
+        ForeignKey("tickets.id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

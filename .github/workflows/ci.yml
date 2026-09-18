@@ -5,7 +5,7 @@ on:
   pull_request:
 
 jobs:
-  test:
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,4 +14,72 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -e ".[dev]"
       - run: ruff check --no-cache .
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      # 三个版本都跑完再汇总，否则 3.11 失败会掩盖 3.13 的问题。
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install -e ".[dev]"
+      # 测试不读 .env（见 tests/conftest.py），所以本机填了真实密钥也不会改变这里的结果。
       - run: pytest --cov=support_agent --cov-report=term-missing
+      # 自检只在主版本上跑一次：它要连库、探测缓存，重复三个版本没有额外信息。
+      # 没配模型是 WARN 而非 FAIL，因此这里退出码为 0（见 cli._render）。
+      - if: matrix.python-version == '3.12'
+        run: python -m support_agent doctor
+
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build
+      - run: python -m build
+      # 装到干净环境里再跑一遍。源码目录里一切正常、打包后缺文件，是这类项目
+      # 最典型的交付事故，而 static/ 正是靠 hatch 的 force-include 进 wheel 的——
+      # 「构建后页面能打开」这条断言就是当初发现它出错的那条路径。
+      - name: Install the wheel in a clean environment and smoke test it
+        run: |
+          python -m venv /tmp/wheel-env
+          /tmp/wheel-env/bin/pip install dist/*.whl
+          /tmp/wheel-env/bin/smartpv-agent version
+          cd /tmp
+          /tmp/wheel-env/bin/smartpv-agent doctor
+          /tmp/wheel-env/bin/python -m uvicorn support_agent.main:app --port 8123 &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8123/health >/dev/null && break
+            sleep 1
+          done
+          curl -s http://127.0.0.1:8123/health
+          curl -sf -o /dev/null http://127.0.0.1:8123/
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # 镜像构建不进 CI 的话，Dockerfile 会静默烂掉——它已经烂过一次了
+      # （COPY static 排在 pip install 之后，构建元数据阶段直接失败）。
+      - run: docker build -t smartpv-support-agent:ci .
+      - name: Run the image and check /health plus the built-in page
+        run: |
+          docker run -d --name smartpv-ci -p 8123:8000 smartpv-support-agent:ci
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:8123/health >/dev/null && break
+            sleep 2
+          done
+          curl -s http://127.0.0.1:8123/health
+          curl -sf -o /dev/null http://127.0.0.1:8123/
+          docker logs smartpv-ci

@@ -6,20 +6,25 @@ Day 6 增补的四项覆盖：写操作提前收敛、非法参数的写操作�
 异步工具 handler 会被 await、历史消息插在本轮问题之前。
 """
 
+import asyncio
 import copy
 import json
+import time
 from typing import Any
 
 from support_agent.services.agent_loop import (
     MAX_ROUNDS,
+    MAX_TOOL_RETRIES,
     ToolArgumentError,
     ToolSpec,
+    build_support_registry,
     build_tool_registry,
     execute_tool_call,
     parse_arguments,
     run_agent_loop,
 )
 from support_agent.services.llm import AssistantTurn, LLMError, ToolCallRequest
+from support_agent.services.tools import ToolError
 
 
 class ScriptedModel:
@@ -125,12 +130,12 @@ async def test_malformed_json_arguments_are_refused() -> None:
 
 async def test_missing_and_extra_arguments_are_refused() -> None:
     model = ScriptedModel(
-        tool_turn("query_order", "{}"),
-        tool_turn("query_order", '{"order_id": "A1001", "admin": true}'),
-        text_turn("请提供订单号。"),
+        tool_turn("query_device", "{}"),
+        tool_turn("query_device", '{"sn": "SN-2024-000123", "admin": true}'),
+        text_turn("请提供设备序列号。"),
     )
 
-    result = await run_agent_loop(model, "查一下订单")
+    result = await run_agent_loop(model, "查一下设备")
 
     assert "缺少必填参数" in result.tool_calls[0].output
     assert "未定义参数" in result.tool_calls[1].output
@@ -139,15 +144,15 @@ async def test_missing_and_extra_arguments_are_refused() -> None:
 
 async def test_tool_level_error_is_returned_instead_of_raised() -> None:
     model = ScriptedModel(
-        tool_turn("query_order", '{"order_id": "A9999"}'),
-        text_turn("没有查到这笔订单。"),
+        tool_turn("query_device", '{"sn": "SN-2024-000999"}'),
+        text_turn("没有查到这台设备。"),
     )
 
-    result = await run_agent_loop(model, "订单 A9999 什么状态")
+    result = await run_agent_loop(model, "设备 SN-2024-000999 什么状态")
 
     assert result.tool_calls[0].ok is False
-    assert "未找到订单 A9999" in result.tool_calls[0].output
-    assert result.answer == "没有查到这笔订单。"
+    assert "未找到设备 SN-2024-000999" in result.tool_calls[0].output
+    assert result.answer == "没有查到这台设备。"
 
 
 async def test_arguments_cannot_escape_the_calculator_sandbox() -> None:
@@ -176,11 +181,11 @@ async def test_write_tool_is_never_executed_automatically() -> None:
         writes=True,
     )
     model = ScriptedModel(
-        tool_turn("create_ticket", '{"reason": "催发货"}'),
+        tool_turn("create_ticket", '{"reason": "设备故障停机"}'),
         text_turn("创建工单需要你确认。"),
     )
 
-    result = await run_agent_loop(model, "帮我投诉", registry=registry)
+    result = await run_agent_loop(model, "设备坏了帮我报修", registry=registry)
 
     assert invoked == []
     assert result.tool_calls[0].ok is False
@@ -188,7 +193,7 @@ async def test_write_tool_is_never_executed_automatically() -> None:
     # 待确认的写操作是一个独立的结束状态，不能让模型再补一句话来掩盖它。
     assert result.stopped_reason == "needs_confirmation"
     assert result.tool_calls[0].requires_confirmation is True
-    assert result.tool_calls[0].parsed == {"reason": "催发货"}
+    assert result.tool_calls[0].parsed == {"reason": "设备故障停机"}
     # 已经拿到确认请求就收场，不该再多调一轮模型。
     assert len(model.calls) == 1
 
@@ -236,22 +241,22 @@ async def test_async_tool_handler_is_awaited() -> None:
         },
         handler=fetch,
     )
-    model = ScriptedModel(tool_turn("search", '{"query": "退款"}'), text_turn("找到了。"))
+    model = ScriptedModel(tool_turn("search", '{"query": "绝缘阻抗"}'), text_turn("找到了。"))
 
-    result = await run_agent_loop(model, "退款怎么走", registry=registry)
+    result = await run_agent_loop(model, "绝缘阻抗低怎么排查", registry=registry)
 
     assert result.tool_calls[0].ok is True
-    assert json.loads(result.tool_calls[0].output) == {"echo": "退款"}
+    assert json.loads(result.tool_calls[0].output) == {"echo": "绝缘阻抗"}
 
 
 async def test_history_is_put_before_the_current_message() -> None:
     model = ScriptedModel(text_turn("好的"))
     history = [
-        {"role": "user", "content": "我的订单号是 A1001"},
+        {"role": "user", "content": "我的设备序列号是 SN-2024-000123"},
         {"role": "assistant", "content": "已记录"},
     ]
 
-    await run_agent_loop(model, "那什么时候发货", history=history)
+    await run_agent_loop(model, "那它现在发电正常吗", history=history)
 
     messages = model.calls[0][0]
     assert [item["role"] for item in messages] == [
@@ -260,7 +265,7 @@ async def test_history_is_put_before_the_current_message() -> None:
         "assistant",
         "user",
     ]
-    assert messages[-1]["content"] == "那什么时候发货"
+    assert messages[-1]["content"] == "那它现在发电正常吗"
 
 
 async def test_loop_stops_at_max_rounds_without_tools() -> None:
@@ -299,3 +304,115 @@ async def test_parse_arguments_rejects_non_object_payload() -> None:
         assert "JSON 对象" in str(exc)
     else:  # pragma: no cover - 防御性断言，正常不会走到
         raise AssertionError("数组参数应当被拒绝")
+
+
+def make_plain_spec(name: str, handler: Any, timeout_seconds: float = 10.0) -> ToolSpec:
+    """构造一个不需要参数的工具，用来测超时和各类失败路径。"""
+    return ToolSpec(
+        name=name,
+        description="测试用工具",
+        parameters={"type": "object", "properties": {}, "required": []},
+        handler=handler,
+        timeout_seconds=timeout_seconds,
+    )
+
+
+async def test_slow_async_tool_times_out() -> None:
+    async def slow(arguments: dict[str, Any]) -> str:
+        await asyncio.sleep(5)
+        return "done"
+
+    outcome = await execute_tool_call("slow", "{}", {"slow": make_plain_spec("slow", slow, 0.05)})
+
+    assert outcome.ok is False
+    assert outcome.error_kind == "timeout"
+    assert "0.05" in outcome.text
+
+
+async def test_sync_tool_is_run_in_a_thread_so_the_timeout_can_fire() -> None:
+    """同步工具若直接在事件循环里调用，会占住循环，让超时计时器根本没机会触发。"""
+
+    def blocking(arguments: dict[str, Any]) -> str:
+        time.sleep(0.3)
+        return "done"
+
+    registry = {"blocking": make_plain_spec("blocking", blocking, 0.05)}
+    outcome = await execute_tool_call("blocking", "{}", registry)
+
+    assert outcome.error_kind == "timeout"
+
+
+async def test_error_kinds_are_classified() -> None:
+    registry = build_tool_registry()
+
+    unknown = await execute_tool_call("not_a_tool", "{}", registry)
+    broken_json = await execute_tool_call("calculator", "not-json", registry)
+    missing_field = await execute_tool_call("calculator", "{}", registry)
+
+    assert unknown.error_kind == "unknown_tool"
+    assert broken_json.error_kind == "invalid_arguments"
+    assert missing_field.error_kind == "invalid_arguments"
+
+
+async def test_write_tool_reports_needs_confirmation_kind() -> None:
+    async def fake_search(query: str) -> str:
+        return "[]"
+
+    registry = build_support_registry(fake_search)
+    outcome = await execute_tool_call("create_ticket", '{"reason": "逆变器告警"}', registry)
+
+    assert outcome.ok is False
+    assert outcome.requires_confirmation is True
+    assert outcome.error_kind == "needs_confirmation"
+
+
+async def test_internal_tool_defect_is_classified_separately() -> None:
+    def broken(arguments: dict[str, Any]) -> str:
+        raise KeyError("boom")
+
+    registry = {"broken": make_plain_spec("broken", broken)}
+    outcome = await execute_tool_call("broken", "{}", registry)
+
+    assert outcome.error_kind == "internal_error"
+    assert "KeyError" in outcome.text
+
+
+async def test_server_stops_a_repeating_failure() -> None:
+    attempts = 0
+
+    def always_fails(arguments: dict[str, Any]) -> str:
+        nonlocal attempts
+        attempts += 1
+        raise ToolError("未找到设备")
+
+    registry = {
+        "lookup": ToolSpec(
+            name="lookup",
+            description="总是失败的查询工具",
+            parameters={
+                "type": "object",
+                "properties": {"sn": {"type": "string"}},
+                "required": ["sn"],
+                "additionalProperties": False,
+            },
+            handler=always_fails,
+        )
+    }
+    same = '{"sn": "SN-2024-000999"}'
+    model = ScriptedModel(
+        tool_turn("lookup", same, "call_1"),
+        tool_turn("lookup", same, "call_2"),
+        tool_turn("lookup", same, "call_3"),
+        text_turn("这台设备查不到，请核对序列号。"),
+    )
+
+    result = await run_agent_loop(model, "查一下 SN-2024-000999", registry)
+
+    # 第三次请求被服务端拦下，handler 只真正跑了 MAX_TOOL_RETRIES 次。
+    assert attempts == MAX_TOOL_RETRIES
+    assert [record.error_kind for record in result.tool_calls] == [
+        "tool_error",
+        "tool_error",
+        "repeated_failure",
+    ]
+    assert result.stopped_reason == "final_answer"

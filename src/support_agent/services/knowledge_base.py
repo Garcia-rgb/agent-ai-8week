@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .industry import build_chunk_metadata, extract_document_version
+
 HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 STRONG_HEADING_PATTERN = re.compile(r"^\*\*(.+?)\*\*(?:\s+★+)?\s*$")
 PAGE_RANGE_PATTERN = re.compile(r"p(\d+)[–-](\d+)")
@@ -24,20 +26,27 @@ class KnowledgeChunk:
     content: str
     visibility: str = "local_only"
     restricted: bool = False
+    # 这份分卷出自哪一版教材。标题和文件名里常常没有版本号（例如 M1 分卷），
+    # 所以由导入侧从索引里读出来显式传入，避免版本冲突检测失去依据。
+    document_version: str | None = None
 
     @property
     def metadata(self) -> dict[str, Any]:
-        return {
-            "document_id": self.document_id,
-            "document_title": self.document_title,
-            "section_title": self.section_title,
-            "page_start": self.page_start,
-            "page_end": self.page_end,
-            "source_file": self.source_path.name,
-            "corpus_id": SMARTPV_CORPUS_ID,
-            "visibility": self.visibility,
-            "restricted": self.restricted,
-        }
+        return build_chunk_metadata(
+            document_id=self.document_id,
+            document_title=self.document_title,
+            section_title=self.section_title,
+            source_file=self.source_path.name,
+            corpus_id=SMARTPV_CORPUS_ID,
+            content=self.content,
+            extra={
+                "page_start": self.page_start,
+                "page_end": self.page_end,
+                "visibility": self.visibility,
+                "restricted": self.restricted,
+            },
+            document_version=self.document_version,
+        )
 
 
 def _parse_page_range(value: str | None) -> tuple[int | None, int | None]:
@@ -122,6 +131,11 @@ def load_smartpv_corpus(root: Path, *, include_restricted: bool = False) -> list
         raise ValueError(f"知识库分卷目录不存在：{split_dir}")
 
     entries = [*index["modules"], *index["appendices"]]
+    # 教材版本只在索引里（source / title），分卷标题和文件名都没有版本号，
+    # 所以在这里抽一次，传给它下面每个章节。
+    corpus_version = extract_document_version(
+        str(index.get("source", "")), str(index.get("title", ""))
+    )
     chunks: list[KnowledgeChunk] = []
     for entry in entries:
         document_id = str(entry.get("id", "")).strip()
@@ -152,6 +166,7 @@ def load_smartpv_corpus(root: Path, *, include_restricted: bool = False) -> list
                     source_path=source_path,
                     content=content,
                     restricted=restricted,
+                    document_version=corpus_version,
                 )
             )
 

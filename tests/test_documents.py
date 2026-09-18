@@ -4,8 +4,8 @@ from support_agent.services.documents import PageText, chunk_pages, extract_page
 
 
 def test_extract_utf8_text() -> None:
-    pages = extract_pages("rules.md", "退款规则".encode())
-    assert pages == [PageText(page=None, text="退款规则")]
+    pages = extract_pages("manual.md", "告警处理".encode())
+    assert pages == [PageText(page=None, text="告警处理")]
 
 
 def test_reject_unsupported_file() -> None:

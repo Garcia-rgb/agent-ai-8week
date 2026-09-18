@@ -22,17 +22,39 @@ def create_confirmation_token(payload: dict[str, Any], secret: str, ttl_seconds:
 
 
 def verify_confirmation_token(token: str, secret: str) -> dict[str, Any]:
-    """校验令牌签名和有效期，成功后返回其中的操作数据。"""
+    """校验令牌签名和有效期，成功后返回其中的操作数据。
+
+    三种拒绝原因必须分得开：格式错、签名被改、放太久。它们对调用方的含义不同——
+    前两种是有人动手脚，第三种只是慢了一步，排查时看的是不同东西。
+    所以签名比对放在自己的 try 之外：写进同一个 try 里会被自己的 except 接住，
+    重包成笼统的「无效」，那个分支就成了永远走不到的死代码。
+    """
     try:
         encoded, supplied_signature = token.split(".", 1)
-        expected = hmac.new(secret.encode(), encoded.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(supplied_signature, expected):
-            raise ValueError("确认令牌签名无效")
+    except ValueError as exc:
+        raise ValueError("确认令牌格式无效") from exc
+
+    expected = hmac.new(secret.encode(), encoded.encode(), hashlib.sha256).hexdigest()
+    # 签名覆盖的是编码后的正文，所以改内容不重签一定对不上。
+    if not hmac.compare_digest(supplied_signature, expected):
+        raise ValueError("确认令牌签名无效")
+
+    try:
         padded = encoded + "=" * (-len(encoded) % 4)
         payload = json.loads(base64.urlsafe_b64decode(padded).decode())
     except (ValueError, TypeError, json.JSONDecodeError) as exc:
-        raise ValueError("确认令牌无效") from exc
-    if int(payload.get("exp", 0)) < int(time.time()):
+        raise ValueError("确认令牌内容无效") from exc
+
+    # 签名对不代表内容可用：这里要挡住「正文不是对象」和「exp 不是数字」，
+    # 否则 `payload.get` 会抛 AttributeError、`int()` 会抛 TypeError，
+    # 都不是 ValueError，调用方接不住就变成 500。
+    if not isinstance(payload, dict):
+        raise ValueError("确认令牌内容无效")
+    try:
+        expires_at = int(payload.get("exp", 0))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("确认令牌内容无效") from exc
+    if expires_at < int(time.time()):
         raise ValueError("确认令牌已过期")
     return payload
 

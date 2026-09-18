@@ -5,6 +5,12 @@
 __pycache__/
 .pytest_cache/
 pytest-temp/
+# pytest 的临时根目录。放在项目里是为了绕开环境对 %TEMP% 清理的拦截，
+# 每次运行给一个全新子目录，避免 pytest 去删上一轮的目录。
+.pytest-runs/
+# 切块对照实验的一次性库与逐条明细。明细里带评测集原问题，评测集本身不入仓库，
+# 所以整个目录一起忽略；只把汇总数字写进 docs/chunking_experiment.md。
+.chunking-experiment/
 .ruff_cache/
 *.py[cod]
 *.db

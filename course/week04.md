@@ -9,7 +9,7 @@
 - Day 3：Embedding、余弦相似度和 pgvector。
 - Day 4：BM25 思想、混合检索和 Rerank。
 - Day 5：引用溯源、Query Rewrite 和空结果降级。
-- Day 6：导入 `sample_data/` 并运行 40 条评测。
+- Day 6：导入本地知识库并运行离线评测。
 - Day 7：修改切块参数，对比结果并写实验记录。
 
 Full Stack LLM Bootcamp 仅选看 LLMOps/UX。它录制于 2023 年，不照抄其中 API 或框架代码。

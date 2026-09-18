@@ -1,6 +1,11 @@
 import pytest
 
-from support_agent.services.tools import ToolError, query_order, safe_calculate
+from support_agent.services.tools import (
+    ToolError,
+    has_structured_anchor,
+    query_device,
+    safe_calculate,
+)
 
 
 def test_safe_calculator() -> None:
@@ -13,7 +18,37 @@ def test_calculator_rejects_unsafe_or_invalid_input(expression: str) -> None:
         safe_calculate(expression)
 
 
-def test_query_order() -> None:
-    assert query_order("a1001").status == "已发货"
+def test_query_device() -> None:
+    assert query_device("sn-2024-000123").status == "并网发电"
     with pytest.raises(ToolError, match="未找到"):
-        query_order("A9999")
+        query_device("SN-2024-000999")
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "SN-2024-000123 这台设备现在什么状态",
+        "sn-2024-000123",  # 小写写法也要认，find_device_sn 会先转大写
+        "计算 100*0.986",
+        "100 乘以 0.986 等于多少",
+        "帮我建个工单",
+        "设备有异响，我要报修",
+    ],
+)
+def test_structured_anchor_is_detected(text: str) -> None:
+    """这几类问题由工具承接，语料范围判据要豁免它们（见 agent.py 的前置拦截）。"""
+    assert has_structured_anchor(text) is True
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "逆变器绝缘阻抗低怎么排查",
+        "Python 怎么装环境",
+        "帮我看看这份资料说了什么",
+        # 单独的「-」不算算式：日期与编号里到处都是，认了会把跑题问题一起放行
+        "2024-09-16 的告警记录怎么看",
+    ],
+)
+def test_plain_questions_have_no_structured_anchor(text: str) -> None:
+    assert has_structured_anchor(text) is False

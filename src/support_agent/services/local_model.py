@@ -16,7 +16,7 @@ from ..graph import build_route_graph
 from .llm import AssistantTurn, ToolCallRequest
 
 ERROR_PREFIX = "错误："
-FALLBACK_ANSWER = "我可以帮你查询订单状态、计算金额，或者回答业务规则方面的问题。"
+FALLBACK_ANSWER = "我可以帮你查询设备运行状态、计算数值，或者回答产品与运维规范方面的问题。"
 NO_TOOL_ANSWER = "我暂时没有可以使用的工具，没法处理这个请求。"
 
 
@@ -89,12 +89,12 @@ class RuleBasedLocalModel:
         """把规则路由的输出映射成工具名和参数。"""
         if route == "calculator":
             return "calculator", {"expression": state.get("expression") or text}
-        if route == "order":
-            return "query_order", {"order_id": state.get("order_id") or ""}
+        if route == "device":
+            return "query_device", {"sn": state.get("device_sn") or ""}
         if route == "ticket":
             arguments: dict[str, Any] = {"reason": text}
-            if state.get("order_id"):
-                arguments["order_id"] = state["order_id"]
+            if state.get("device_sn"):
+                arguments["device_sn"] = state["device_sn"]
             return "create_ticket", arguments
         return "search_knowledge_base", {"query": text}
 
@@ -110,18 +110,20 @@ class RuleBasedLocalModel:
 
     @staticmethod
     def _render(name: str, output: str) -> str:
-        """把工具返回的结构化结果拼成一句客服口吻的回答。"""
+        """把工具返回的结构化结果拼成一句技术支持口吻的回答。"""
         try:
             payload = json.loads(output)
         except json.JSONDecodeError:
             return output
         if name == "calculator" and isinstance(payload, int | float):
             return f"计算结果：{payload:g}"
-        if name == "query_order" and isinstance(payload, dict):
-            refund = "支持" if payload.get("refundable") else "暂不支持"
+        if name == "query_device" and isinstance(payload, dict):
+            grid = "已并网" if payload.get("grid_connected") else "未并网"
             return (
-                f"订单 {payload.get('id')} 当前状态为“{payload.get('status')}”，"
-                f"金额 ¥{float(payload.get('amount', 0)):.2f}，{refund}退款。"
+                f"设备 {payload.get('sn')}（{payload.get('model')}）当前状态为“"
+                f"{payload.get('status')}”，额定功率 "
+                f"{float(payload.get('rated_power_kw', 0)):.0f} kW，{grid}，"
+                f"固件版本 {payload.get('firmware')}。"
             )
         if name == "create_ticket":
             return "创建工单会产生写操作，请确认后再提交。"

@@ -114,8 +114,8 @@ async def test_ingest_corpus_stores_section_metadata(
     assert stored.chunk_metadata["source_file"] == "M1-基础.md"
     assert stored.chunk_metadata["corpus_id"] == "smartpv_v2"
 
-    await rag.ingest("refund.md", "text/markdown", "退款需要三个工作日。".encode())
+    await rag.ingest("extra.md", "text/markdown", "绝缘阻抗低时先检查保护地线。".encode())
     hits = await rag.search("最大功率点", corpus_id="smartpv_v2")
     assert hits
     assert all(hit.chunk.chunk_metadata["corpus_id"] == "smartpv_v2" for hit in hits)
-    assert await rag.search("退款", corpus_id="missing_corpus") == []
+    assert await rag.search("保护地线", corpus_id="missing_corpus") == []

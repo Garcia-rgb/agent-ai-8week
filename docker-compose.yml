@@ -1,6 +1,9 @@
 services:
   api:
     build: .
+    # 崩溃或宿主机重启后自动拉起。用 unless-stopped 而非 always：
+    # 手动 down 掉的服务不该在下次开机时自己回来。
+    restart: unless-stopped
     ports:
       - "8000:8000"
     environment:
@@ -12,7 +15,23 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-}
       RETRIEVAL_CORPUS_ID: smartpv_v2
-      RETRIEVAL_MIN_SCORE: "0.4"
+      # 向量后端。默认沿用哈希向量，容器开箱可用。
+      # 要跑本地语义模型，把下面两行改成 onnx / 512，并取消本服务 volumes 里
+      # /models 那行的注释（模型目录约 90MB，不进镜像也不进仓库）。
+      EMBEDDING_BACKEND: hash
+      EMBEDDING_DIMENSION: "384"
+      # 保持 0.0：拒答由语料范围判据承担（见 services/rag.py 的 out_of_corpus），
+      # 不是分数阈值。实测库内问题的 top1 最低只有 0.324（「AFCI 保护动作了怎么办」），
+      # 而库外问题在语义向量下最高能到 0.486（「怎么考驾照」撞上「危险品运输管理」一节），
+      # 两者重叠，设任何阈值都会误伤。
+      RETRIEVAL_MIN_SCORE: "0.0"
+      # 检索缓存与限流共用上面那个 REDIS_URL。Redis 挂掉时服务会降级到进程内实现
+      # （/health 的 cache.degraded 会翻真），接口本身不受影响——只是命中率下降、
+      # 限流额度按进程数放大。
+      CACHE_TTL_SECONDS: "300"
+      # 单用户每窗口的 /chat 次数，0 表示不限流。
+      RATE_LIMIT_REQUESTS: "30"
+      RATE_LIMIT_WINDOW_SECONDS: "60"
     depends_on:
       postgres:
         condition: service_healthy
@@ -30,9 +49,13 @@ services:
       timeout: 3s
       retries: 5
       start_period: 10s
+    # 要用本地语义模型时取消注释，并把宿主机上的模型目录挂进来：
+    # volumes:
+    #   - ${EMBEDDING_MODEL_HOST_PATH:-./models}:/models:ro
 
   postgres:
     image: pgvector/pgvector:pg16
+    restart: unless-stopped
     ports:
       - "127.0.0.1:5433:5432"
     environment:
@@ -50,6 +73,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

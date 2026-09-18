@@ -1,19 +1,49 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
-name = "enterprise-support-agent"
-version = "0.1.0"
-description = "An interview-ready enterprise knowledge-base support agent and 8-week curriculum"
+name = "smartpv-support-agent"
+# 版本号单一来源：src/support_agent/__init__.py 的 __version__。
+# 打包、/health、OpenAPI 与 CLI 都从这里取，避免多处手写导致版本分叉。
+dynamic = ["version"]
+description = "光伏电站技术支持 Agent：混合检索、工具调用、人工确认与分层离线评测"
 readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Garcia-rgb" }]
+keywords = [
+  "rag",
+  "agent",
+  "llm",
+  "tool-calling",
+  "fastapi",
+  "knowledge-base",
+  "photovoltaic",
+  "semantic-search",
+]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Web Environment",
+  "Framework :: FastAPI",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Text Processing :: Indexing",
+  "Typing :: Typed",
+]
 dependencies = [
   "aiosqlite>=0.20,<1",
   "asyncpg>=0.30,<1",
   "fastapi>=0.115,<1",
   "httpx>=0.28,<1",
   "langgraph>=1,<2",
+  "mcp>=2,<3",
   "pgvector>=0.3,<1",
   "pydantic-settings>=2.7,<3",
   "pypdf>=5,<7",
@@ -24,6 +54,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# 本地语义向量后端。默认不装：核心依赖保持轻量，CI 也不需要模型。
+semantic = [
+  "onnxruntime>=1.20,<2",
+  "tokenizers>=0.20,<1",
+]
 dev = [
   "coverage[toml]>=7,<8",
   "pytest>=8,<9",
@@ -32,12 +67,40 @@ dev = [
   "ruff>=0.9,<1",
 ]
 
+[project.scripts]
+# 安装后可用：smartpv-agent version / doctor / serve
+smartpv-agent = "support_agent.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/Garcia-rgb/agent-ai-8week"
+Repository = "https://github.com/Garcia-rgb/agent-ai-8week"
+Issues = "https://github.com/Garcia-rgb/agent-ai-8week/issues"
+Changelog = "https://github.com/Garcia-rgb/agent-ai-8week/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/Garcia-rgb/agent-ai-8week/blob/main/docs/architecture.md"
+
+[tool.hatch.version]
+path = "src/support_agent/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/support_agent"]
+
+[tool.hatch.build.targets.wheel.force-include]
+# 内置客户端页面：源码里在仓库根的 static/，打进 wheel 后落到包内，
+# 这样 pip 安装到任何环境、从任何工作目录启动都能命中 GET /（见 main.locate_static_dir）。
+"static" = "support_agent/static"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["support_agent"]
+
+[tool.coverage.report]
+# 门限取 80：本机装了 onnxruntime 时约 88%，CI 不装它，语义后端的几个分支不会被执行，
+# 会低几个点。80 既能拦住覆盖率静默下滑，又不会让 CI 因环境差异误报。
+fail_under = 80
+show_missing = true
 
 [tool.ruff]
 line-length = 100

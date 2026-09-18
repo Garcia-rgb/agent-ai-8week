@@ -5,11 +5,11 @@
 
 import json
 
-from support_agent.services.tools import ToolError, query_order, safe_calculate
+from support_agent.services.tools import ToolError, query_device, safe_calculate
 
 TOOLS = {
     "calculator": lambda args: safe_calculate(args["expression"]),
-    "query_order": lambda args: query_order(args["order_id"]).__dict__,
+    "query_device": lambda args: query_device(args["sn"]).__dict__,
 }
 
 
@@ -26,4 +26,4 @@ def execute_tool_call(name: str, arguments_json: str):
 
 if __name__ == "__main__":
     print(execute_tool_call("calculator", '{"expression": "(12 + 8) / 4"}'))
-    print(execute_tool_call("query_order", '{"order_id": "A1001"}'))
+    print(execute_tool_call("query_device", '{"sn": "SN-2024-000123"}'))

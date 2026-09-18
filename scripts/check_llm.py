@@ -18,7 +18,8 @@ from support_agent.services.llm import LLMError, OpenAICompatibleClient
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 QUESTION = "帮我算一下 (12+8)/4 是多少"
-CONTEXT = "退款申请将在三个工作日内处理，超过五个工作日请联系人工客服。"
+# 问答自检用的资料片段：随手给一段光伏运维文本，验证模型是否会按指令只依据它作答。
+CONTEXT = "绝缘阻抗低（告警 2062）处理：检查阵列对地阻抗，并确认保护地线连接可靠。"
 
 
 def mask(secret: str | None) -> str:
@@ -41,7 +42,7 @@ async def main() -> int:
 
     print("\n[1/2] 单轮问答（不带工具）……")
     try:
-        answer = await client.answer("退款多久到账？", [CONTEXT])
+        answer = await client.answer("绝缘阻抗低应该先查什么？", [CONTEXT])
     except LLMError as exc:
         print(f"  失败：category={exc.category} retryable={exc.retryable} 原因={exc}")
         return 1

@@ -10,6 +10,20 @@ import json
 from support_agent.services.agent_loop import ToolSpec, build_support_registry
 from support_agent.services.local_model import RuleBasedLocalModel
 
+DEVICE_SN = "SN-2024-000123"
+# 和 query_device 真实返回的结构保持一致：asdict 之后序列化出来的就是这一段。
+DEVICE_JSON = json.dumps(
+    {
+        "sn": DEVICE_SN,
+        "model": "SUN2000-100KTL-M1",
+        "rated_power_kw": 100.0,
+        "status": "并网发电",
+        "firmware": "V200R023C10SPC200",
+        "grid_connected": True,
+    },
+    ensure_ascii=False,
+)
+
 
 def build_registry() -> dict[str, ToolSpec]:
     async def search(query: str) -> str:
@@ -50,12 +64,14 @@ def requested_tool(turn) -> tuple[str, dict]:
     return call.name, json.loads(call.arguments)
 
 
-async def test_order_question_becomes_a_query_order_call() -> None:
+async def test_device_question_becomes_a_query_device_call() -> None:
     model = RuleBasedLocalModel()
 
-    turn = await model.chat_with_tools([message("订单 A1001 到哪了")], offered(build_registry()))
+    turn = await model.chat_with_tools(
+        [message(f"设备 {DEVICE_SN} 现在是什么状态")], offered(build_registry())
+    )
 
-    assert requested_tool(turn) == ("query_order", {"order_id": "A1001"})
+    assert requested_tool(turn) == ("query_device", {"sn": DEVICE_SN})
 
 
 async def test_calculator_question_becomes_a_calculator_call() -> None:
@@ -69,21 +85,23 @@ async def test_calculator_question_becomes_a_calculator_call() -> None:
 async def test_knowledge_question_searches_the_knowledge_base() -> None:
     model = RuleBasedLocalModel()
 
-    turn = await model.chat_with_tools([message("退款要多久")], offered(build_registry()))
+    turn = await model.chat_with_tools(
+        [message("绝缘阻抗低怎么排查")], offered(build_registry())
+    )
 
-    assert requested_tool(turn) == ("search_knowledge_base", {"query": "退款要多久"})
+    assert requested_tool(turn) == ("search_knowledge_base", {"query": "绝缘阻抗低怎么排查"})
 
 
-async def test_ticket_request_keeps_the_order_id() -> None:
+async def test_ticket_request_keeps_the_device_sn() -> None:
     model = RuleBasedLocalModel()
 
     turn = await model.chat_with_tools(
-        [message("订单 A1001 一直没发货，我要投诉")], offered(build_registry())
+        [message("设备 SN-2024-000789 一直故障停机，我要投诉")], offered(build_registry())
     )
 
     name, arguments = requested_tool(turn)
     assert name == "create_ticket"
-    assert arguments["order_id"] == "A1001"
+    assert arguments["device_sn"] == "SN-2024-000789"
     assert "投诉" in arguments["reason"]
 
 
@@ -101,10 +119,12 @@ async def test_injection_never_reaches_a_tool() -> None:
 async def test_missing_tool_is_reported_instead_of_requested() -> None:
     model = RuleBasedLocalModel()
 
-    # 只把计算器交给模型：本地模型识别出这是订单问题，但目标工具不在白名单里。
+    # 只把计算器交给模型：本地模型识别出这是设备查询，但目标工具不在白名单里。
     only_calculator = [build_registry()["calculator"].as_schema()]
 
-    turn = await model.chat_with_tools([message("订单 A1001 到哪了")], only_calculator)
+    turn = await model.chat_with_tools(
+        [message(f"设备 {DEVICE_SN} 现在是什么状态")], only_calculator
+    )
 
     assert turn.tool_calls == []
     assert "没有可以使用的工具" in turn.content
@@ -113,32 +133,33 @@ async def test_missing_tool_is_reported_instead_of_requested() -> None:
 async def test_tool_result_is_rendered_into_a_plain_answer() -> None:
     model = RuleBasedLocalModel()
     messages = tool_exchange(
-        "订单 A1001 到哪了",
-        "query_order",
-        '{"id": "A1001", "status": "已发货", "amount": 199.0, "refundable": true}',
+        f"设备 {DEVICE_SN} 现在是什么状态", "query_device", DEVICE_JSON
     )
 
     turn = await model.chat_with_tools(messages, offered(build_registry()))
 
     assert turn.tool_calls == []
-    assert "A1001" in turn.content
-    assert "已发货" in turn.content
-    assert "支持退款" in turn.content
+    assert DEVICE_SN in turn.content
+    assert "SUN2000-100KTL-M1" in turn.content
+    assert "并网发电" in turn.content
+    assert "已并网" in turn.content
 
 
 async def test_tool_error_is_passed_through_without_the_prefix() -> None:
     model = RuleBasedLocalModel()
-    messages = tool_exchange("订单 A9999 到哪了", "query_order", "错误：未找到订单 A9999")
+    messages = tool_exchange(
+        "设备 SN-2024-000999 什么状态", "query_device", "错误：未找到设备 SN-2024-000999"
+    )
 
     turn = await model.chat_with_tools(messages, offered(build_registry()))
 
-    assert turn.content == "未找到订单 A9999"
+    assert turn.content == "未找到设备 SN-2024-000999"
 
 
 async def test_no_tools_offered_means_no_more_tool_requests() -> None:
     model = RuleBasedLocalModel()
 
-    turn = await model.chat_with_tools([message("订单 A1001 到哪了")], None)
+    turn = await model.chat_with_tools([message(f"设备 {DEVICE_SN} 现在是什么状态")], None)
 
     assert turn.tool_calls == []
     assert turn.content

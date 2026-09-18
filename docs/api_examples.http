@@ -9,10 +9,10 @@ POST {{baseUrl}}/documents
 Content-Type: multipart/form-data; boundary=boundary
 
 --boundary
-Content-Disposition: form-data; name="file"; filename="policy.md"
+Content-Disposition: form-data; name="file"; filename="alarm.md"
 Content-Type: text/markdown
 
-退款将在三个工作日内原路退回。
+绝缘阻抗低对应告警 2062，需要检查直流侧对地绝缘。
 --boundary--
 
 ### 知识问答
@@ -20,16 +20,16 @@ POST {{baseUrl}}/chat
 Content-Type: application/json
 
 {
-  "message": "退货后多久到账？",
+  "message": "绝缘阻抗低对应哪个告警？",
   "user_id": "{{userId}}"
 }
 
-### 订单工具
+### 设备查询
 POST {{baseUrl}}/chat
 Content-Type: application/json
 
 {
-  "message": "查询订单 A1001",
+  "message": "设备 SN-2024-000123 现在什么状态",
   "user_id": "{{userId}}"
 }
 
@@ -38,7 +38,7 @@ POST {{baseUrl}}/chat
 Content-Type: application/json
 
 {
-  "message": "物流一直没有更新，请创建工单",
+  "message": "设备 SN-2024-000789 一直故障停机，请创建工单",
   "user_id": "{{userId}}"
 }
 
@@ -51,6 +51,16 @@ Content-Type: application/json
   "user_id": "{{userId}}"
 }
 
-### 离线评测（先运行 python scripts/seed.py）
-POST {{baseUrl}}/evaluations/run
+# 上面这个接口要过四道闸，顺序是有意的：
+#   1. 签名      —— 改动令牌任意一个字符，返回 400「确认令牌签名无效」
+#   2. 有效期    —— 超过 exp（默认十分钟），返回 400「确认令牌已过期」
+#   3. 归属      —— action 或 user_id 与请求不符，返回 403
+#   4. 单次使用  —— 同一张令牌第二次提交，返回 409「确认令牌已经使用」
+# 前三道是无状态判断，只看令牌本身；第四道靠 consumed_confirmation_tokens 的主键冲突判定，
+# 所以并发提交也只会放行一次。验签排在判重之前：被改过的令牌返回 400 而不是 409，
+# 否则「已使用」这个响应本身就会泄露这张令牌存在过。
+# 四段行为可一键复现：python examples/confirmation_token_demo.py
 
+### 离线评测——dataset_path 指向你自己的评测集 JSONL
+### 返回 sample 口径（三层全过才算一条通过）与 layers 分层口径，并回显本次使用的 model
+POST {{baseUrl}}/evaluations/run?dataset_path=D:/path/to/dataset.jsonl

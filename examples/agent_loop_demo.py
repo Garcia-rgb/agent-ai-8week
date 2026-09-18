@@ -40,11 +40,13 @@ def say(text: str) -> AssistantTurn:
 async def main() -> None:
     model = ScriptedModel(
         ask("calculator", '{"expression": "(12 + 8) / 4"}'),
-        ask("query_order", '{"order_id": "A1001"}'),
-        say("计算结果是 5。订单 A1001 已发货，金额 ¥199.00，支持退款。"),
+        ask("query_device", '{"sn": "SN-2024-000123"}'),
+        say("计算结果是 5。设备 SN-2024-000123 型号 SUN2000-100KTL-M1，当前并网发电。"),
     )
 
-    result = await run_agent_loop(model, "帮我算 (12+8)/4，再看看订单 A1001 能不能退款")
+    result = await run_agent_loop(
+        model, "帮我算 (12+8)/4，再看看设备 SN-2024-000123 现在什么状态"
+    )
 
     print("\n===== 执行轨迹 =====")
     for record in result.tool_calls:
